@@ -1016,9 +1016,9 @@ export GIT_NO_REPLACE_OBJECTS=1
 test -z "${GIT_ALTERNATE_OBJECT_DIRECTORIES:-}"
 GIT_COMMON_DIR=$(git --no-replace-objects rev-parse --path-format=absolute --git-common-dir)
 test -z "$(git --no-replace-objects for-each-ref --format='%(refname)' refs/replace)"
-test ! -s "$GIT_COMMON_DIR/info/grafts"
-test ! -s "$GIT_COMMON_DIR/objects/info/alternates"
-test ! -s "$GIT_COMMON_DIR/shallow"
+test ! -e "$GIT_COMMON_DIR/info/grafts"
+test ! -e "$GIT_COMMON_DIR/objects/info/alternates"
+test ! -e "$GIT_COMMON_DIR/shallow"
 test "$(git --no-replace-objects rev-parse --is-shallow-repository)" = "false"
 test -n "${PHASE_01_PUBLISHED_ANCHOR_SHA:-}"
 test -n "${PHASE_01_PUBLISHED_ANCHOR_TREE:-}"
@@ -1208,6 +1208,12 @@ test -n "${PHASE_01_EXTERNAL_EVIDENCE_ROOT:-}"
 test -n "${PHASE_01_TASK_DISPATCH_ROOT:-}"
 test -n "${PHASE_01_PUBLISHED_ANCHOR_SHA:-}"
 test -n "${PHASE_01_PUBLISHED_ANCHOR_TREE:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_PARENT:-}"
+test -n "${PHASE_01_TASK_MINUS_ONE_CHAIN:-}"
+test -n "${GOVERNANCE_BASE_SHA:-}"
+test -n "${CONTRACT_INTRODUCTION_SHA:-}"
+test -n "${CONTRACT_INTRODUCTION_TREE:-}"
+test -n "${CONTRACT_INTRODUCTION_BLOB:-}"
 env -i PATH="$PATH" LC_ALL=C.UTF-8 python -I -B - \
   "$PHASE_01_EXTERNAL_EVIDENCE_PARENT" \
   "$PHASE_01_EXTERNAL_EVIDENCE_ROOT" \
@@ -1221,7 +1227,13 @@ env -i PATH="$PATH" LC_ALL=C.UTF-8 python -I -B - \
   "$PUBLISHED_TASK_00_DISPATCH_SHA256" \
   "$PHASE_01_PUBLISHED_ANCHOR_SHA" \
   "$PHASE_01_PUBLISHED_ANCHOR_TREE" \
-  "$TASK_00_AUTHOR_TASK_PATH" <<'PY'
+  "$TASK_00_AUTHOR_TASK_PATH" \
+  "$PHASE_01_PUBLISHED_ANCHOR_PARENT" \
+  "$PHASE_01_TASK_MINUS_ONE_CHAIN" \
+  "$GOVERNANCE_BASE_SHA" \
+  "$CONTRACT_INTRODUCTION_SHA" \
+  "$CONTRACT_INTRODUCTION_TREE" \
+  "$CONTRACT_INTRODUCTION_BLOB" <<'PY'
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -1356,7 +1368,7 @@ def value_matches(mapping, key, expected):
 
 
 def main(arguments):
-    require(len(arguments) == 13, "invalid acceptance arguments")
+    require(len(arguments) == 19, "invalid acceptance arguments")
     (
         parent_raw,
         generation_raw,
@@ -1371,6 +1383,12 @@ def main(arguments):
         anchor_sha,
         anchor_tree,
         author_task_path,
+        anchor_parent,
+        task_minus_one_chain,
+        governance_base_sha,
+        contract_introduction_sha,
+        contract_introduction_tree,
+        contract_introduction_blob,
     ) = arguments
     for digest in (
         generation_id,
@@ -1384,7 +1402,25 @@ def main(arguments):
         require(isinstance(digest, str) and HEX64.fullmatch(digest), "invalid digest")
     require(HEX40.fullmatch(anchor_sha) is not None, "invalid anchor SHA")
     require(HEX40.fullmatch(anchor_tree) is not None, "invalid anchor tree")
+    for git_identity in (
+        anchor_parent,
+        governance_base_sha,
+        contract_introduction_sha,
+        contract_introduction_tree,
+        contract_introduction_blob,
+    ):
+        require(HEX40.fullmatch(git_identity) is not None, "invalid Git identity")
     require(AUTHOR_PATH.fullmatch(author_task_path) is not None, "invalid author path")
+    projected_chain = task_minus_one_chain.splitlines()
+    require(
+        len(projected_chain) >= 2
+        and len(set(projected_chain)) == len(projected_chain)
+        and all(HEX40.fullmatch(commit) is not None for commit in projected_chain),
+        "invalid Task -1 chain",
+    )
+    require(projected_chain[0] == contract_introduction_sha, "wrong chain introduction")
+    require(projected_chain[-1] == anchor_sha, "wrong chain head")
+    require(projected_chain[-2] == anchor_parent, "wrong chain parent")
 
     parent = canonical_directory(parent_raw, "evidence parent")
     generation = canonical_directory(generation_raw, "evidence generation")
@@ -1479,8 +1515,34 @@ def main(arguments):
     authors = sealed["author-inventory.json"]
     reviews = sealed["published-anchor-reviews.json"]
     require(value_matches(projection, "run_id", RUN_ID), "projection run")
+    require(value_matches(projection, "base_sha", governance_base_sha), "projection base")
     require(value_matches(projection, "head_sha", anchor_sha), "projection anchor")
     require(value_matches(projection, "head_tree_sha", anchor_tree), "projection tree")
+    require(value_matches(projection, "head_parent_sha", anchor_parent), "projection parent")
+    require(
+        value_matches(projection, "task_minus_one_commit_chain", projected_chain),
+        "projection chain",
+    )
+    require(
+        value_matches(projection, "contract_introduction_sha", contract_introduction_sha),
+        "projection contract introduction",
+    )
+    require(
+        value_matches(
+            projection,
+            "contract_introduction_tree_sha",
+            contract_introduction_tree,
+        ),
+        "projection contract tree",
+    )
+    require(
+        value_matches(
+            projection,
+            "contract_introduction_blob_sha",
+            contract_introduction_blob,
+        ),
+        "projection contract blob",
+    )
     require(value_matches(authors, "run_id", RUN_ID), "authors run")
     require(value_matches(reviews, "run_id", RUN_ID), "reviews run")
     require(value_matches(reviews, "anchor_sha", anchor_sha), "reviews anchor")
@@ -1546,8 +1608,30 @@ try:
 except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
     fail("Task 0 acceptance failed")
 PY
-test "$(git rev-parse HEAD)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
-test "$(git rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+export GIT_NO_REPLACE_OBJECTS=1
+test -z "${GIT_ALTERNATE_OBJECT_DIRECTORIES:-}"
+GIT_COMMON_DIR=$(git --no-replace-objects rev-parse --path-format=absolute --git-common-dir)
+test -z "$(git --no-replace-objects for-each-ref --format='%(refname)' refs/replace)"
+test ! -e "$GIT_COMMON_DIR/info/grafts"
+test ! -e "$GIT_COMMON_DIR/objects/info/alternates"
+test ! -e "$GIT_COMMON_DIR/shallow"
+test "$(git --no-replace-objects rev-parse --is-shallow-repository)" = "false"
+test "$(git --no-replace-objects rev-parse HEAD)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git --no-replace-objects rev-parse 'HEAD^{tree}')" = "$PHASE_01_PUBLISHED_ANCHOR_TREE"
+test "$(git --no-replace-objects rev-parse 'HEAD^')" = "$PHASE_01_PUBLISHED_ANCHOR_PARENT"
+test "$(git --no-replace-objects rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git --no-replace-objects branch --show-current)" = "agent/phase-01-governance"
+test "$(git --no-replace-objects rev-list --parents -n 1 HEAD | wc -w)" -eq 2
+test "$(git --no-replace-objects rev-parse "$CONTRACT_INTRODUCTION_SHA^")" = "$GOVERNANCE_BASE_SHA"
+test "$(git --no-replace-objects rev-parse "$CONTRACT_INTRODUCTION_SHA^{tree}")" = "$CONTRACT_INTRODUCTION_TREE"
+test "$(git --no-replace-objects rev-parse "$CONTRACT_INTRODUCTION_SHA:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+test "$(git --no-replace-objects rev-parse "HEAD:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+test "$(git --no-replace-objects rev-list --reverse "$CONTRACT_INTRODUCTION_SHA^..HEAD")" = "$PHASE_01_TASK_MINUS_ONE_CHAIN"
+for TASK_MINUS_ONE_COMMIT in $(git --no-replace-objects rev-list --reverse "$CONTRACT_INTRODUCTION_SHA..HEAD"); do
+  test "$(git --no-replace-objects rev-list --parents -n 1 "$TASK_MINUS_ONE_COMMIT" | wc -w)" -eq 2
+  test "$(git --no-replace-objects diff-tree --no-commit-id --name-only -r "$TASK_MINUS_ONE_COMMIT")" = "docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"
+  test "$(git --no-replace-objects rev-parse "$TASK_MINUS_ONE_COMMIT:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+done
 test -z "$(git status --porcelain=v1)"
 ```
 
