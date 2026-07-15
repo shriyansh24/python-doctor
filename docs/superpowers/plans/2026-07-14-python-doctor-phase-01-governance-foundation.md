@@ -95,11 +95,13 @@ CPython 3.9–3.14; portable snapshot mode permits ordinary cross-platform oracl
 schema, and manifest validation but cannot supply that hostile-repository
 claim.
 
-Every Task 0 local and CI unittest run must satisfy
-`result.wasSuccessful() and skip_count == 0`. A platform-inapplicable native
-test is conditionally defined and registered only on its target platform; it
-must not be registered as a skipped test. Task 0 removes every `skipTest`,
-`skipIf`, `skipUnless`, and skip decorator from
+Every Task 0 local and CI unittest run captures the pre-run suite count and must
+satisfy `result.wasSuccessful()`, `result.testsRun == expected_count`, and empty
+`skipped`, `expectedFailures`, and `unexpectedSuccesses`. A platform-
+inapplicable native test is conditionally defined and registered only on its
+target platform; it must not be registered as a skipped test. Task 0 removes
+every `skipTest`, `skipIf`, `skipUnless`, skip decorator, and
+`expectedFailure` reference from
 `tests/test_governance_oracles.py`. A required host fixture that cannot be
 provisioned is a test failure. A capability-independent behavior uses a
 deterministic simulated regression; a platform-native behavior is registered
@@ -1730,7 +1732,8 @@ accept and fallback must reject, proving the boundary is deliberate. CPython
 claiming an unavailable native comparison.
 
 Run the isolated local harness specified in Step 3. In the RED state it must
-exit with the full-module test failure code, never a startup-controlled zero.
+exit with its declared missing-root, missing-module, or failed-stage supervisor
+code, never a startup-controlled zero.
 
 - [ ] **Step 2: Assign independent specification authors**
 
@@ -1753,38 +1756,73 @@ native junction test is conditionally defined only when
 `os.name == "nt"`; it has no skip decorator, and failure to provision its
 junction fixture fails the test. The simulated reparse test remains registered
 on every platform. A source regression asserts that the module contains no
-runtime skip call or unittest skip decorator.
+runtime skip call, unittest skip decorator, or `expectedFailure` reference.
+Every suite captures `suite.countTestCases()` before execution and accepts a
+result only when `testsRun` equals that count, `wasSuccessful()` is true, and
+`skipped`, `expectedFailures`, and `unexpectedSuccesses` are all empty. Each
+mandatory single-test suite must additionally have a pre-run count of one.
 
 Every workflow and local-gate Python process starts as
 `python -I -B -X utf8`; neither command nor workflow environment sets
-`PYTHONPATH`. The inline runner imports its trusted standard-library bootstrap
-before resolving the checkout, rejects a checkout path already present on the
-isolated startup path, then registers a closed finder for only `tests`,
-`scripts`, and `python_doctor` at explicit resolved repository roots. Repository
-paths are never added to `sys.path`; ordinary resolution remains confined to
-the captured trusted interpreter paths, while only the three allowlisted
-top-level packages use the explicit finder. A repository `sitecustomize.py`,
-`usercustomize.py`, `unittest.py`, or any other allowed or unapproved top-level
-shadow file therefore cannot control startup or ordinary imports. The workflow
-runner executes both exact mandatory tests, the exact full module, and the
-standalone validator with distinct nonzero failure codes. The local runner
-always executes the simulated test and additionally executes the native
-junction test when and only when it is registered on Windows, then runs the
-same full module and validator.
+`PYTHONPATH`. The inline supervisor imports trusted standard-library modules
+only and never imports or executes repository code in its process. It validates
+the checkout, `src`, `tests`, `scripts`, `scripts/governance`, and
+`src/python_doctor` component by component: every resolved path is root-
+contained, every component is a directory, and no component is a symlink or an
+observed Windows reparse point. A bounded recursive before/after snapshot
+rejects non-regular files, symlink/reparse descendants, identity changes, and
+persistent mutation of any Python file in those roots during a stage.
+
+Every repository-controlled stage runs in its own new
+`python -I -B -X utf8 -S` child. Before repository import, the child reduces
+`sys.path` to the interpreter's validated standard-library, zip-library, and
+dynamic-loader entries. It installs one closed finder backed by exact-origin
+`SourceFileLoader` instances for only `tests`,
+`tests.test_governance_oracles`, `scripts`, `scripts.governance`,
+`scripts.governance.validate_oracles`, and `python_doctor`. The finder validates
+the caller-supplied package path, source identity, loader, `spec.origin`, and
+package search locations against the predeclared resolved file before and after
+load. An allowlisted-prefix miss or redirected `__path__` raises immediately and
+never falls through to a later meta finder, path hook, or `sys.path` lookup.
+Repository paths never enter `sys.path`; all child import machinery and path
+state must equal the captured closed state after the stage.
+
+The workflow supervisor launches separate native-test, simulated-test,
+full-module, and validator children; the local supervisor omits the native child
+off Windows because that test is intentionally not registered there. A child
+accepts a test stage only under the complete result predicate above and accepts
+the validator only for exact integer zero. Only after all stage checks and
+post-stage import/path/source checks pass does trusted child code flush a
+stage-and-nonce evidence line and terminate with that stage's distinctive
+nonzero success sentinel. The supervisor replays captured child stdout/stderr
+and accepts only the exact sentinel plus exactly one matching evidence line.
+Exit zero, hard `os._exit(0)`, another code, missing/duplicate evidence,
+exception, skip, expected failure, unexpected success, wrong `testsRun`,
+validator nonzero/non-integer, or before/after mutation is a parent failure.
 
 Tests parse every shell line in the exact workflow and fail if any Python
 invocation lacks all four tokens `python -I -B -X utf8`, if `PYTHONPATH` occurs
 anywhere in the workflow, if an unapproved project import is added to the
 finder, if any repository path is added to `sys.path`, or if a repository path
-precedes the trusted startup paths. A hostile startup regression copies the
-fixture subject, places exit-zero
-`sitecustomize.py`, `usercustomize.py`, and `unittest.py` traps in both checkout
-root and `src`, adds an unapproved top-level module, substitutes sentinel failing
-oracle tests and validator exceptions/`SystemExit`, and runs the extracted
-inline harness. It proves the unapproved module is unimportable and checks the
-expected `20`/`21`/`30`/`40` codes and sentinel markers. Neither startup hooks,
-stdlib shadow names, an unknown repository module, nor an escaping validator
-can bypass or select the gate's status.
+precedes the trusted startup paths. Hostile regressions cover symlink/reparse
+components and files; redirected package `__path__`; an allowlisted module miss;
+a later meta finder, path hook, or repository `sys.path` entry; persistent source
+mutation; hard exit zero; validator exception/`SystemExit`; a suite that runs
+fewer tests than collected; and `expectedFailure`/unexpected-success cases.
+Snapshot regressions additionally require a traversal/scandir error, excessive
+entry count, excessive depth, and persistent mutation of each non-Python
+`.txt`/`.toml` oracle class to fail closed; every regular watched file is
+identity-bound and hashed, not only Python source.
+They also retain the exit-zero `sitecustomize.py`, `usercustomize.py`, and
+`unittest.py` traps in checkout root and `src`. Every case must yield the
+supervisor's declared failure, not a successful workflow.
+
+This protocol detects accidental bypasses, hard exits, missing completion, and
+the named hostile fixtures. It is not an authenticity boundary against
+deliberately malicious repository code that reads the public inline protocol
+and forges its known nonce/evidence/sentinel values; no stronger claim is made.
+`G13-HOSTILE-REPOSITORY` remains governed by the separate fail-closed native-
+containment requirements above.
 
 Create `.github/workflows/governance-oracles-windows.yml` exactly as follows.
 The two action revisions are the verified official `actions/checkout` v7.0.0
@@ -1838,91 +1876,419 @@ jobs:
         shell: pwsh
         run: |
           @'
-          import importlib
-          import importlib.abc
-          import importlib.machinery
+          import ast
+          import hashlib
+          import json
+          import os
           import pathlib
+          import secrets
+          import stat
+          import subprocess
           import sys
-          import unittest
 
-          def stop(code: int) -> None:
+          MAX_ENTRIES = 8192
+          MAX_DEPTH = 32
+          MAX_FILE_BYTES = 4 * 1024 * 1024
+          MAX_TOTAL_BYTES = 64 * 1024 * 1024
+
+          def fail(code, detail):
+              print("oracle supervisor failure: " + detail, file=sys.stderr)
               raise SystemExit(code)
 
-          def within(candidate: pathlib.Path, parent: pathlib.Path) -> bool:
+          def is_reparse(metadata):
+              flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+              attributes = getattr(metadata, "st_file_attributes", 0)
+              return stat.S_ISLNK(metadata.st_mode) or bool(flag and attributes & flag)
+
+          def signature(metadata):
+              return (
+                  metadata.st_dev,
+                  metadata.st_ino,
+                  stat.S_IFMT(metadata.st_mode),
+                  metadata.st_size,
+                  metadata.st_mtime_ns,
+                  metadata.st_ctime_ns,
+              )
+
+          def within(candidate, parent):
               return candidate == parent or parent in candidate.parents
 
-          if len(sys.argv) != 2:
-              stop(90)
-          try:
-              root = pathlib.Path(sys.argv[1]).resolve(strict=True)
-              source = (root / "src").resolve(strict=True)
-              current = pathlib.Path.cwd().resolve(strict=True)
-          except (OSError, RuntimeError):
-              stop(91)
-          if current != root or not root.is_dir() or not source.is_dir():
-              stop(92)
-          trusted_path = tuple(sys.path)
-          try:
-              observed = tuple(
-                  pathlib.Path(item).resolve(strict=False)
-                  for item in trusted_path
-                  if item
-              )
-          except (OSError, RuntimeError):
-              stop(93)
-          if any(within(item, root) for item in observed):
-              stop(94)
-          for module in (importlib, pathlib, unittest):
-              origin = getattr(module, "__file__", None)
-              if origin and within(pathlib.Path(origin).resolve(strict=True), root):
-                  stop(95)
+          def checked_directory(path, root=None):
+              absolute = pathlib.Path(os.path.abspath(str(path)))
+              try:
+                  resolved = absolute.resolve(strict=True)
+              except (OSError, RuntimeError):
+                  fail(90, "directory resolution")
+              if os.path.normcase(str(absolute)) != os.path.normcase(str(resolved)):
+                  fail(90, "non-canonical directory")
+              cursor = pathlib.Path(resolved.anchor)
+              for component in resolved.parts[1:]:
+                  cursor = cursor / component
+                  metadata = cursor.lstat()
+                  if is_reparse(metadata) or not stat.S_ISDIR(metadata.st_mode):
+                      fail(90, "unsafe directory component")
+              if root is not None and not within(resolved, root):
+                  fail(90, "directory escapes checkout")
+              return resolved
 
-          class ReviewedProjectFinder(importlib.abc.MetaPathFinder):
-              roots = {
-                  "tests": (str(root),),
-                  "scripts": (str(root),),
-                  "python_doctor": (str(source),),
-              }
+          def read_regular(path, root):
+              try:
+                  resolved = path.resolve(strict=True)
+                  before = path.lstat()
+                  if resolved != path or not within(resolved, root):
+                      fail(91, "source escapes checkout")
+                  if is_reparse(before) or not stat.S_ISREG(before.st_mode):
+                      fail(91, "source is not regular")
+                  if before.st_size > MAX_FILE_BYTES:
+                      fail(91, "source exceeds cap")
+                  flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+                  flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+                  descriptor = os.open(path, flags)
+                  try:
+                      opened = os.fstat(descriptor)
+                      if signature(opened) != signature(before):
+                          fail(91, "source identity changed")
+                      chunks = bytearray()
+                      while len(chunks) <= MAX_FILE_BYTES:
+                          part = os.read(descriptor, min(65536, MAX_FILE_BYTES + 1 - len(chunks)))
+                          if not part:
+                              break
+                          chunks.extend(part)
+                      after_fd = os.fstat(descriptor)
+                  finally:
+                      os.close(descriptor)
+                  after_path = path.lstat()
+              except OSError:
+                  fail(91, "source capture failed")
+              if len(chunks) > MAX_FILE_BYTES:
+                  fail(91, "source exceeds cap")
+              if signature(opened) != signature(after_fd) or signature(opened) != signature(after_path):
+                  fail(91, "source mutated")
+              return bytes(chunks), signature(opened)
+
+          def snapshot(roots, checkout):
+              records = {}
+              total = 0
+              count = 0
+              for base in roots:
+                  pending = [(base, 0)]
+                  while pending:
+                      current, depth = pending.pop()
+                      if depth > MAX_DEPTH:
+                          fail(92, "snapshot depth exceeds cap")
+                      current = checked_directory(current, checkout)
+                      count += 1
+                      if count > MAX_ENTRIES:
+                          fail(92, "snapshot entry count exceeds cap")
+                      records["D:" + current.relative_to(checkout).as_posix()] = signature(current.lstat())
+                      try:
+                          with os.scandir(current) as iterator:
+                              names = []
+                              for entry in iterator:
+                                  count += 1
+                                  if count > MAX_ENTRIES:
+                                      fail(92, "snapshot entry count exceeds cap")
+                                  names.append(entry.name)
+                      except OSError:
+                          fail(92, "snapshot traversal failed")
+                      child_directories = []
+                      for name in sorted(names):
+                          path = current / name
+                          try:
+                              metadata = path.lstat()
+                          except OSError:
+                              fail(92, "snapshot entry inspection failed")
+                          if is_reparse(metadata):
+                              fail(92, "snapshot entry is a link or reparse point")
+                          if stat.S_ISDIR(metadata.st_mode):
+                              child_directories.append(path)
+                              continue
+                          if not stat.S_ISREG(metadata.st_mode):
+                              fail(92, "snapshot entry is not regular")
+                          raw, identity = read_regular(path, checkout)
+                          total += len(raw)
+                          if count > MAX_ENTRIES or total > MAX_TOTAL_BYTES:
+                              fail(92, "snapshot exceeds cap")
+                          key = "F:" + path.relative_to(checkout).as_posix()
+                          records[key] = (identity, hashlib.sha256(raw).hexdigest())
+                      for child in reversed(child_directories):
+                          pending.append((child, depth + 1))
+              return records
+
+          if len(sys.argv) != 2:
+              fail(90, "arguments")
+          checkout = checked_directory(pathlib.Path(sys.argv[1]))
+          if pathlib.Path.cwd().resolve(strict=True) != checkout:
+              fail(90, "working directory")
+          source = checked_directory(checkout / "src", checkout)
+          tests_root = checked_directory(checkout / "tests", checkout)
+          scripts_root = checked_directory(checkout / "scripts", checkout)
+          checked_directory(scripts_root / "governance", checkout)
+          doctor_root = checked_directory(source / "python_doctor", checkout)
+          watched_roots = (tests_root, scripts_root, doctor_root)
+
+          module_paths = {
+              "tests": (tests_root / "__init__.py", True),
+              "tests.test_governance_oracles": (tests_root / "test_governance_oracles.py", False),
+              "scripts": (scripts_root / "__init__.py", True),
+              "scripts.governance": (scripts_root / "governance" / "__init__.py", True),
+              "scripts.governance.validate_oracles": (scripts_root / "governance" / "validate_oracles.py", False),
+              "python_doctor": (doctor_root / "__init__.py", True),
+          }
+          encoded_modules = {}
+          for name, (path, package) in module_paths.items():
+              raw, _identity = read_regular(path, checkout)
+              encoded_modules[name] = (str(path), package, hashlib.sha256(raw).hexdigest())
+          test_raw, _test_identity = read_regular(module_paths["tests.test_governance_oracles"][0], checkout)
+          try:
+              syntax = ast.parse(test_raw, filename="tests/test_governance_oracles.py")
+          except (SyntaxError, ValueError):
+              fail(93, "test source syntax")
+          for node in ast.walk(syntax):
+              if (
+                  isinstance(node, ast.Name) and node.id == "expectedFailure"
+              ) or (
+                  isinstance(node, ast.Attribute) and node.attr == "expectedFailure"
+              ):
+                  fail(93, "expectedFailure is forbidden")
+
+          CHILD = r'''
+          import hashlib
+          import importlib.abc
+          import importlib.machinery
+          import importlib.util
+          import json
+          import os
+          import pathlib
+          import stat
+          import sys
+          import sysconfig
+          import unittest
+
+          MAX_SOURCE_BYTES = 4 * 1024 * 1024
+
+          def abort():
+              os._exit(50)
+
+          def is_reparse(metadata):
+              flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+              attributes = getattr(metadata, "st_file_attributes", 0)
+              return stat.S_ISLNK(metadata.st_mode) or bool(flag and attributes & flag)
+
+          def signature(metadata):
+              return (metadata.st_dev, metadata.st_ino, stat.S_IFMT(metadata.st_mode), metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns)
+
+          def capture(path, expected_digest):
+              try:
+                  resolved = path.resolve(strict=True)
+                  before = path.lstat()
+                  if resolved != path or not (resolved == root or root in resolved.parents):
+                      abort()
+                  if is_reparse(before) or not stat.S_ISREG(before.st_mode) or before.st_size > MAX_SOURCE_BYTES:
+                      abort()
+                  descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
+                  try:
+                      opened = os.fstat(descriptor)
+                      chunks = bytearray()
+                      while len(chunks) <= MAX_SOURCE_BYTES:
+                          part = os.read(descriptor, min(65536, MAX_SOURCE_BYTES + 1 - len(chunks)))
+                          if not part:
+                              break
+                          chunks.extend(part)
+                      after_fd = os.fstat(descriptor)
+                  finally:
+                      os.close(descriptor)
+                  after_path = path.lstat()
+              except OSError:
+                  abort()
+              if len(chunks) > MAX_SOURCE_BYTES:
+                  abort()
+              raw = bytes(chunks)
+              if signature(before) != signature(opened) or signature(opened) != signature(after_fd) or signature(opened) != signature(after_path):
+                  abort()
+              if hashlib.sha256(raw).hexdigest() != expected_digest:
+                  abort()
+              return raw
+
+          if len(sys.argv) != 6:
+              abort()
+          root = pathlib.Path(sys.argv[1])
+          stage = sys.argv[2]
+          nonce = sys.argv[3]
+          success_code = int(sys.argv[4])
+          modules = json.loads(sys.argv[5])
+          stdlib = pathlib.Path(sysconfig.get_path("stdlib")).resolve(strict=True)
+          platstdlib = pathlib.Path(sysconfig.get_path("platstdlib")).resolve(strict=True)
+          base = pathlib.Path(sys.base_prefix).resolve(strict=True)
+          sanitized = []
+          for item in tuple(sys.path):
+              if not item:
+                  continue
+              candidate = pathlib.Path(item).resolve(strict=False)
+              allowed = candidate in (stdlib, platstdlib)
+              allowed = allowed or candidate.name in ("lib-dynload", "DLLs") and base in candidate.parents
+              allowed = allowed or candidate.suffix == ".zip" and base in candidate.parents
+              if allowed:
+                  sanitized.append(str(candidate))
+          if not sanitized:
+              abort()
+          sys.path[:] = sanitized
+          closed_path = tuple(sys.path)
+          closed_hooks = tuple(sys.path_hooks)
+
+          class ExactLoader(importlib.machinery.SourceFileLoader):
+              def __init__(self, fullname, path, digest):
+                  super().__init__(fullname, path)
+                  self.digest = digest
+
+              def get_code(self, fullname):
+                  raw = capture(pathlib.Path(self.path), self.digest)
+                  return self.source_to_code(raw, self.path)
+
+          class ClosedFinder(importlib.abc.MetaPathFinder):
+              prefixes = ("tests", "scripts", "python_doctor")
 
               def find_spec(self, fullname, path=None, target=None):
-                  top_level = fullname.partition(".")[0]
-                  if top_level not in self.roots:
+                  if fullname.partition(".")[0] not in self.prefixes:
                       return None
-                  search = list(path) if path is not None else list(self.roots[top_level])
-                  return importlib.machinery.PathFinder.find_spec(fullname, search)
+                  if fullname not in modules:
+                      raise ModuleNotFoundError("allowlisted module miss")
+                  raw_path, package, digest = modules[fullname]
+                  source_path = pathlib.Path(raw_path)
+                  expected_parent = source_path.parent
+                  if path is None:
+                      if "." in fullname:
+                          raise ModuleNotFoundError("missing package path")
+                  else:
+                      parent_name = fullname.rpartition(".")[0]
+                      if parent_name not in modules:
+                          raise ModuleNotFoundError("unreviewed parent package")
+                      parent_source = pathlib.Path(modules[parent_name][0])
+                      supplied = tuple(pathlib.Path(item).resolve(strict=False) for item in path)
+                      if supplied != (parent_source.parent,):
+                          raise ModuleNotFoundError("redirected package path")
+                  capture(source_path, digest)
+                  loader = ExactLoader(fullname, str(source_path), digest)
+                  spec = importlib.util.spec_from_loader(fullname, loader, is_package=package)
+                  if spec is None or pathlib.Path(spec.origin).resolve(strict=False) != source_path:
+                      abort()
+                  if package and tuple(pathlib.Path(item).resolve(strict=False) for item in spec.submodule_search_locations or ()) != (expected_parent,):
+                      abort()
+                  return spec
 
-          sys.meta_path.insert(0, ReviewedProjectFinder())
+          finder = ClosedFinder()
+          sys.meta_path.insert(0, finder)
+          closed_meta = tuple(sys.meta_path)
 
-          required = (
-              "tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip",
-              "tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level",
-          )
+          def verify_import_state():
+              if tuple(sys.path) != closed_path or tuple(sys.path_hooks) != closed_hooks or tuple(sys.meta_path) != closed_meta:
+                  abort()
+              for name, module in tuple(sys.modules.items()):
+                  if name.partition(".")[0] not in finder.prefixes:
+                      continue
+                  if name not in modules:
+                      abort()
+                  raw_path, package, digest = modules[name]
+                  expected = pathlib.Path(raw_path)
+                  spec = getattr(module, "__spec__", None)
+                  loader = getattr(module, "__loader__", None)
+                  if spec is None or not isinstance(loader, ExactLoader) or spec.loader is not loader:
+                      abort()
+                  if pathlib.Path(loader.path).resolve(strict=False) != expected:
+                      abort()
+                  if pathlib.Path(spec.origin).resolve(strict=False) != expected:
+                      abort()
+                  if pathlib.Path(module.__file__).resolve(strict=False) != expected:
+                      abort()
+                  if package:
+                      locations = tuple(pathlib.Path(item).resolve(strict=False) for item in module.__path__)
+                      if locations != (expected.parent,):
+                          abort()
+                      spec_locations = tuple(pathlib.Path(item).resolve(strict=False) for item in spec.submodule_search_locations or ())
+                      if spec_locations != (expected.parent,):
+                          abort()
+                  elif spec.submodule_search_locations is not None:
+                      abort()
+                  capture(expected, digest)
 
-          def run_zero_skip(name: str, expected_count=None) -> bool:
+          def run_suite(target, exact_count):
               try:
-                  suite = unittest.defaultTestLoader.loadTestsFromName(name)
-                  if expected_count is not None and suite.countTestCases() != expected_count:
-                      return False
+                  suite = unittest.defaultTestLoader.loadTestsFromName(target)
+                  expected = suite.countTestCases()
+                  if expected <= 0 or exact_count is not None and expected != exact_count:
+                      abort()
                   result = unittest.TextTestRunner(verbosity=2).run(suite)
               except BaseException:
-                  return False
-              skip_count = len(result.skipped)
-              return result.wasSuccessful() and skip_count == 0
+                  abort()
+              if not result.wasSuccessful() or result.testsRun != expected:
+                  abort()
+              if result.skipped or result.expectedFailures or result.unexpectedSuccesses:
+                  abort()
 
-          for offset, name in enumerate(required):
-              if not run_zero_skip(name, 1):
-                  stop(20 + offset)
-          if not run_zero_skip("tests.test_governance_oracles"):
-              stop(30)
-          try:
-              from scripts.governance import validate_oracles
-              validator_status = validate_oracles.main((str(root),))
-          except BaseException:
-              stop(40)
-          if type(validator_status) is not int or validator_status != 0:
-              stop(40)
-          stop(0)
-          '@ | python -I -B -X utf8 - "$env:GITHUB_WORKSPACE"
+          if stage == "native":
+              run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip", 1)
+          elif stage == "simulated":
+              run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level", 1)
+          elif stage == "full":
+              run_suite("tests.test_governance_oracles", None)
+          elif stage == "validator":
+              try:
+                  from scripts.governance import validate_oracles
+                  status = validate_oracles.main((str(root),))
+              except BaseException:
+                  abort()
+              if type(status) is not int or status != 0:
+                  abort()
+          else:
+              abort()
+          verify_import_state()
+          evidence = "PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + stage
+          print(evidence, flush=True)
+          sys.stdout.flush()
+          sys.stderr.flush()
+          os._exit(success_code)
+          '''
+
+          stages = (("native", 71), ("simulated", 72), ("full", 73), ("validator", 74))
+          child_environment = {
+              key: value
+              for key, value in os.environ.items()
+              if not key.upper().startswith("PYTHON")
+              and key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP"}
+          }
+          encoded = json.dumps(encoded_modules, sort_keys=True, separators=(",", ":"))
+          for stage, success_code in stages:
+              before = snapshot(watched_roots, checkout)
+              nonce = secrets.token_hex(16)
+              try:
+                  process = subprocess.run(
+                      [sys.executable, "-I", "-B", "-X", "utf8", "-S", "-", str(checkout), stage, nonce, str(success_code), encoded],
+                      input=CHILD.encode("utf-8"),
+                      cwd=str(checkout),
+                      env=child_environment,
+                      capture_output=True,
+                      timeout=300,
+                  )
+              except subprocess.TimeoutExpired as error:
+                  if error.stdout:
+                      sys.stdout.buffer.write(error.stdout)
+                      sys.stdout.buffer.flush()
+                  if error.stderr:
+                      sys.stderr.buffer.write(error.stderr)
+                      sys.stderr.buffer.flush()
+                  fail(94, "stage timeout")
+              sys.stdout.buffer.write(process.stdout)
+              sys.stdout.buffer.flush()
+              sys.stderr.buffer.write(process.stderr)
+              sys.stderr.buffer.flush()
+              after = snapshot(watched_roots, checkout)
+              evidence = ("PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + stage).encode("ascii")
+              if before != after or process.returncode != success_code:
+                  fail(94, "stage process failed")
+              if process.stdout.splitlines().count(evidence) != 1:
+                  fail(94, "stage evidence missing or duplicated")
+          raise SystemExit(0)
+          '@ | python -I -B -X utf8 -S - "$env:GITHUB_WORKSPACE"
           exit $LASTEXITCODE
 ```
 
@@ -1930,103 +2296,421 @@ Run the local zero-skip gate and commit these exact files before Task 1.
 
 ```bash
 python -I -B -X utf8 - "$PWD" <<'PY'
-import importlib
-import importlib.abc
-import importlib.machinery
+import ast
+import hashlib
+import json
+import os
 import pathlib
+import secrets
+import stat
+import subprocess
 import sys
-import unittest
 
+MAX_ENTRIES = 8192
+MAX_DEPTH = 32
+MAX_FILE_BYTES = 4 * 1024 * 1024
+MAX_TOTAL_BYTES = 64 * 1024 * 1024
 
-def stop(code):
+def fail(code, detail):
+    print("oracle supervisor failure: " + detail, file=sys.stderr)
     raise SystemExit(code)
 
+def is_reparse(metadata):
+    flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    attributes = getattr(metadata, "st_file_attributes", 0)
+    return stat.S_ISLNK(metadata.st_mode) or bool(flag and attributes & flag)
+
+def signature(metadata):
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        stat.S_IFMT(metadata.st_mode),
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
 
 def within(candidate, parent):
     return candidate == parent or parent in candidate.parents
 
+def checked_directory(path, root=None):
+    absolute = pathlib.Path(os.path.abspath(str(path)))
+    try:
+        resolved = absolute.resolve(strict=True)
+    except (OSError, RuntimeError):
+        fail(90, "directory resolution")
+    if os.path.normcase(str(absolute)) != os.path.normcase(str(resolved)):
+        fail(90, "non-canonical directory")
+    cursor = pathlib.Path(resolved.anchor)
+    for component in resolved.parts[1:]:
+        cursor = cursor / component
+        metadata = cursor.lstat()
+        if is_reparse(metadata) or not stat.S_ISDIR(metadata.st_mode):
+            fail(90, "unsafe directory component")
+    if root is not None and not within(resolved, root):
+        fail(90, "directory escapes checkout")
+    return resolved
+
+def read_regular(path, root):
+    try:
+        resolved = path.resolve(strict=True)
+        before = path.lstat()
+        if resolved != path or not within(resolved, root):
+            fail(91, "source escapes checkout")
+        if is_reparse(before) or not stat.S_ISREG(before.st_mode):
+            fail(91, "source is not regular")
+        if before.st_size > MAX_FILE_BYTES:
+            fail(91, "source exceeds cap")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if signature(opened) != signature(before):
+                fail(91, "source identity changed")
+            chunks = bytearray()
+            while len(chunks) <= MAX_FILE_BYTES:
+                part = os.read(descriptor, min(65536, MAX_FILE_BYTES + 1 - len(chunks)))
+                if not part:
+                    break
+                chunks.extend(part)
+            after_fd = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        after_path = path.lstat()
+    except OSError:
+        fail(91, "source capture failed")
+    if len(chunks) > MAX_FILE_BYTES:
+        fail(91, "source exceeds cap")
+    if signature(opened) != signature(after_fd) or signature(opened) != signature(after_path):
+        fail(91, "source mutated")
+    return bytes(chunks), signature(opened)
+
+def snapshot(roots, checkout):
+    records = {}
+    total = 0
+    count = 0
+    for base in roots:
+        pending = [(base, 0)]
+        while pending:
+            current, depth = pending.pop()
+            if depth > MAX_DEPTH:
+                fail(92, "snapshot depth exceeds cap")
+            current = checked_directory(current, checkout)
+            count += 1
+            if count > MAX_ENTRIES:
+                fail(92, "snapshot entry count exceeds cap")
+            records["D:" + current.relative_to(checkout).as_posix()] = signature(current.lstat())
+            try:
+                with os.scandir(current) as iterator:
+                    names = []
+                    for entry in iterator:
+                        count += 1
+                        if count > MAX_ENTRIES:
+                            fail(92, "snapshot entry count exceeds cap")
+                        names.append(entry.name)
+            except OSError:
+                fail(92, "snapshot traversal failed")
+            child_directories = []
+            for name in sorted(names):
+                path = current / name
+                try:
+                    metadata = path.lstat()
+                except OSError:
+                    fail(92, "snapshot entry inspection failed")
+                if is_reparse(metadata):
+                    fail(92, "snapshot entry is a link or reparse point")
+                if stat.S_ISDIR(metadata.st_mode):
+                    child_directories.append(path)
+                    continue
+                if not stat.S_ISREG(metadata.st_mode):
+                    fail(92, "snapshot entry is not regular")
+                raw, identity = read_regular(path, checkout)
+                total += len(raw)
+                if count > MAX_ENTRIES or total > MAX_TOTAL_BYTES:
+                    fail(92, "snapshot exceeds cap")
+                key = "F:" + path.relative_to(checkout).as_posix()
+                records[key] = (identity, hashlib.sha256(raw).hexdigest())
+            for child in reversed(child_directories):
+                pending.append((child, depth + 1))
+    return records
 
 if len(sys.argv) != 2:
-    stop(90)
-try:
-    root = pathlib.Path(sys.argv[1]).resolve(strict=True)
-    source = (root / "src").resolve(strict=True)
-    current = pathlib.Path.cwd().resolve(strict=True)
-except (OSError, RuntimeError):
-    stop(91)
-if current != root or not root.is_dir() or not source.is_dir():
-    stop(92)
-trusted_path = tuple(sys.path)
-try:
-    observed = tuple(
-        pathlib.Path(item).resolve(strict=False) for item in trusted_path if item
-    )
-except (OSError, RuntimeError):
-    stop(93)
-if any(within(item, root) for item in observed):
-    stop(94)
-for module in (importlib, pathlib, unittest):
-    origin = getattr(module, "__file__", None)
-    if origin and within(pathlib.Path(origin).resolve(strict=True), root):
-        stop(95)
+    fail(90, "arguments")
+checkout = checked_directory(pathlib.Path(sys.argv[1]))
+if pathlib.Path.cwd().resolve(strict=True) != checkout:
+    fail(90, "working directory")
+source = checked_directory(checkout / "src", checkout)
+tests_root = checked_directory(checkout / "tests", checkout)
+scripts_root = checked_directory(checkout / "scripts", checkout)
+checked_directory(scripts_root / "governance", checkout)
+doctor_root = checked_directory(source / "python_doctor", checkout)
+watched_roots = (tests_root, scripts_root, doctor_root)
 
+module_paths = {
+    "tests": (tests_root / "__init__.py", True),
+    "tests.test_governance_oracles": (tests_root / "test_governance_oracles.py", False),
+    "scripts": (scripts_root / "__init__.py", True),
+    "scripts.governance": (scripts_root / "governance" / "__init__.py", True),
+    "scripts.governance.validate_oracles": (scripts_root / "governance" / "validate_oracles.py", False),
+    "python_doctor": (doctor_root / "__init__.py", True),
+}
+encoded_modules = {}
+for name, (path, package) in module_paths.items():
+    raw, _identity = read_regular(path, checkout)
+    encoded_modules[name] = (str(path), package, hashlib.sha256(raw).hexdigest())
+test_raw, _test_identity = read_regular(module_paths["tests.test_governance_oracles"][0], checkout)
+try:
+    syntax = ast.parse(test_raw, filename="tests/test_governance_oracles.py")
+except (SyntaxError, ValueError):
+    fail(93, "test source syntax")
+for node in ast.walk(syntax):
+    if (
+        isinstance(node, ast.Name) and node.id == "expectedFailure"
+    ) or (
+        isinstance(node, ast.Attribute) and node.attr == "expectedFailure"
+    ):
+        fail(93, "expectedFailure is forbidden")
 
-class ReviewedProjectFinder(importlib.abc.MetaPathFinder):
-    roots = {
-        "tests": (str(root),),
-        "scripts": (str(root),),
-        "python_doctor": (str(source),),
-    }
+CHILD = r'''
+import hashlib
+import importlib.abc
+import importlib.machinery
+import importlib.util
+import json
+import os
+import pathlib
+import stat
+import sys
+import sysconfig
+import unittest
+
+MAX_SOURCE_BYTES = 4 * 1024 * 1024
+
+def abort():
+    os._exit(50)
+
+def is_reparse(metadata):
+    flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    attributes = getattr(metadata, "st_file_attributes", 0)
+    return stat.S_ISLNK(metadata.st_mode) or bool(flag and attributes & flag)
+
+def signature(metadata):
+    return (metadata.st_dev, metadata.st_ino, stat.S_IFMT(metadata.st_mode), metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns)
+
+def capture(path, expected_digest):
+    try:
+        resolved = path.resolve(strict=True)
+        before = path.lstat()
+        if resolved != path or not (resolved == root or root in resolved.parents):
+            abort()
+        if is_reparse(before) or not stat.S_ISREG(before.st_mode) or before.st_size > MAX_SOURCE_BYTES:
+            abort()
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
+        try:
+            opened = os.fstat(descriptor)
+            chunks = bytearray()
+            while len(chunks) <= MAX_SOURCE_BYTES:
+                part = os.read(descriptor, min(65536, MAX_SOURCE_BYTES + 1 - len(chunks)))
+                if not part:
+                    break
+                chunks.extend(part)
+            after_fd = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        after_path = path.lstat()
+    except OSError:
+        abort()
+    if len(chunks) > MAX_SOURCE_BYTES:
+        abort()
+    raw = bytes(chunks)
+    if signature(before) != signature(opened) or signature(opened) != signature(after_fd) or signature(opened) != signature(after_path):
+        abort()
+    if hashlib.sha256(raw).hexdigest() != expected_digest:
+        abort()
+    return raw
+
+if len(sys.argv) != 6:
+    abort()
+root = pathlib.Path(sys.argv[1])
+stage = sys.argv[2]
+nonce = sys.argv[3]
+success_code = int(sys.argv[4])
+modules = json.loads(sys.argv[5])
+stdlib = pathlib.Path(sysconfig.get_path("stdlib")).resolve(strict=True)
+platstdlib = pathlib.Path(sysconfig.get_path("platstdlib")).resolve(strict=True)
+base = pathlib.Path(sys.base_prefix).resolve(strict=True)
+sanitized = []
+for item in tuple(sys.path):
+    if not item:
+        continue
+    candidate = pathlib.Path(item).resolve(strict=False)
+    allowed = candidate in (stdlib, platstdlib)
+    allowed = allowed or candidate.name in ("lib-dynload", "DLLs") and base in candidate.parents
+    allowed = allowed or candidate.suffix == ".zip" and base in candidate.parents
+    if allowed:
+        sanitized.append(str(candidate))
+if not sanitized:
+    abort()
+sys.path[:] = sanitized
+closed_path = tuple(sys.path)
+closed_hooks = tuple(sys.path_hooks)
+
+class ExactLoader(importlib.machinery.SourceFileLoader):
+    def __init__(self, fullname, path, digest):
+        super().__init__(fullname, path)
+        self.digest = digest
+
+    def get_code(self, fullname):
+        raw = capture(pathlib.Path(self.path), self.digest)
+        return self.source_to_code(raw, self.path)
+
+class ClosedFinder(importlib.abc.MetaPathFinder):
+    prefixes = ("tests", "scripts", "python_doctor")
 
     def find_spec(self, fullname, path=None, target=None):
-        top_level = fullname.partition(".")[0]
-        if top_level not in self.roots:
+        if fullname.partition(".")[0] not in self.prefixes:
             return None
-        search = list(path) if path is not None else list(self.roots[top_level])
-        return importlib.machinery.PathFinder.find_spec(fullname, search)
+        if fullname not in modules:
+            raise ModuleNotFoundError("allowlisted module miss")
+        raw_path, package, digest = modules[fullname]
+        source_path = pathlib.Path(raw_path)
+        expected_parent = source_path.parent
+        if path is None:
+            if "." in fullname:
+                raise ModuleNotFoundError("missing package path")
+        else:
+            parent_name = fullname.rpartition(".")[0]
+            if parent_name not in modules:
+                raise ModuleNotFoundError("unreviewed parent package")
+            parent_source = pathlib.Path(modules[parent_name][0])
+            supplied = tuple(pathlib.Path(item).resolve(strict=False) for item in path)
+            if supplied != (parent_source.parent,):
+                raise ModuleNotFoundError("redirected package path")
+        capture(source_path, digest)
+        loader = ExactLoader(fullname, str(source_path), digest)
+        spec = importlib.util.spec_from_loader(fullname, loader, is_package=package)
+        if spec is None or pathlib.Path(spec.origin).resolve(strict=False) != source_path:
+            abort()
+        if package and tuple(pathlib.Path(item).resolve(strict=False) for item in spec.submodule_search_locations or ()) != (expected_parent,):
+            abort()
+        return spec
 
+finder = ClosedFinder()
+sys.meta_path.insert(0, finder)
+closed_meta = tuple(sys.meta_path)
 
-sys.meta_path.insert(0, ReviewedProjectFinder())
+def verify_import_state():
+    if tuple(sys.path) != closed_path or tuple(sys.path_hooks) != closed_hooks or tuple(sys.meta_path) != closed_meta:
+        abort()
+    for name, module in tuple(sys.modules.items()):
+        if name.partition(".")[0] not in finder.prefixes:
+            continue
+        if name not in modules:
+            abort()
+        raw_path, package, digest = modules[name]
+        expected = pathlib.Path(raw_path)
+        spec = getattr(module, "__spec__", None)
+        loader = getattr(module, "__loader__", None)
+        if spec is None or not isinstance(loader, ExactLoader) or spec.loader is not loader:
+            abort()
+        if pathlib.Path(loader.path).resolve(strict=False) != expected:
+            abort()
+        if pathlib.Path(spec.origin).resolve(strict=False) != expected:
+            abort()
+        if pathlib.Path(module.__file__).resolve(strict=False) != expected:
+            abort()
+        if package:
+            locations = tuple(pathlib.Path(item).resolve(strict=False) for item in module.__path__)
+            if locations != (expected.parent,):
+                abort()
+            spec_locations = tuple(pathlib.Path(item).resolve(strict=False) for item in spec.submodule_search_locations or ())
+            if spec_locations != (expected.parent,):
+                abort()
+        elif spec.submodule_search_locations is not None:
+            abort()
+        capture(expected, digest)
 
-
-def run_zero_skip(name, expected_count=None):
+def run_suite(target, exact_count):
     try:
-        suite = unittest.defaultTestLoader.loadTestsFromName(name)
-        if expected_count is not None and suite.countTestCases() != expected_count:
-            return False
+        suite = unittest.defaultTestLoader.loadTestsFromName(target)
+        expected = suite.countTestCases()
+        if expected <= 0 or exact_count is not None and expected != exact_count:
+            abort()
         result = unittest.TextTestRunner(verbosity=2).run(suite)
     except BaseException:
-        return False
-    return result.wasSuccessful() and len(result.skipped) == 0
+        abort()
+    if not result.wasSuccessful() or result.testsRun != expected:
+        abort()
+    if result.skipped or result.expectedFailures or result.unexpectedSuccesses:
+        abort()
 
+if stage == "native":
+    run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip", 1)
+elif stage == "simulated":
+    run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level", 1)
+elif stage == "full":
+    run_suite("tests.test_governance_oracles", None)
+elif stage == "validator":
+    try:
+        from scripts.governance import validate_oracles
+        status = validate_oracles.main((str(root),))
+    except BaseException:
+        abort()
+    if type(status) is not int or status != 0:
+        abort()
+else:
+    abort()
+verify_import_state()
+evidence = "PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + stage
+print(evidence, flush=True)
+sys.stdout.flush()
+sys.stderr.flush()
+os._exit(success_code)
+'''
 
-required = [
-    (
-        "tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level",
-        21,
-    ),
-]
-if sys.platform == "win32":
-    required.insert(
-        0,
-        (
-            "tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip",
-            20,
-        ),
-    )
-for name, failure_code in required:
-    if not run_zero_skip(name, 1):
-        stop(failure_code)
-if not run_zero_skip("tests.test_governance_oracles"):
-    stop(30)
-try:
-    from scripts.governance import validate_oracles
-    validator_status = validate_oracles.main((str(root),))
-except BaseException:
-    stop(40)
-if type(validator_status) is not int or validator_status != 0:
-    stop(40)
-stop(0)
+stages = (("simulated", 72), ("full", 73), ("validator", 74))
+if os.name == "nt":
+    stages = (("native", 71),) + stages
+child_environment = {
+    key: value
+    for key, value in os.environ.items()
+    if not key.upper().startswith("PYTHON")
+    and key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP"}
+}
+encoded = json.dumps(encoded_modules, sort_keys=True, separators=(",", ":"))
+for stage, success_code in stages:
+    before = snapshot(watched_roots, checkout)
+    nonce = secrets.token_hex(16)
+    try:
+        process = subprocess.run(
+            [sys.executable, "-I", "-B", "-X", "utf8", "-S", "-", str(checkout), stage, nonce, str(success_code), encoded],
+            input=CHILD.encode("utf-8"),
+            cwd=str(checkout),
+            env=child_environment,
+            capture_output=True,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired as error:
+        if error.stdout:
+            sys.stdout.buffer.write(error.stdout)
+            sys.stdout.buffer.flush()
+        if error.stderr:
+            sys.stderr.buffer.write(error.stderr)
+            sys.stderr.buffer.flush()
+        fail(94, "stage timeout")
+    sys.stdout.buffer.write(process.stdout)
+    sys.stdout.buffer.flush()
+    sys.stderr.buffer.write(process.stderr)
+    sys.stderr.buffer.flush()
+    after = snapshot(watched_roots, checkout)
+    evidence = ("PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + stage).encode("ascii")
+    if before != after or process.returncode != success_code:
+        fail(94, "stage process failed")
+    if process.stdout.splitlines().count(evidence) != 1:
+        fail(94, "stage evidence missing or duplicated")
+raise SystemExit(0)
+
 PY
 python -I -B -X utf8 -m compileall -q scripts tests
 git add .github/workflows/governance-oracles-windows.yml scripts/__init__.py scripts/governance/__init__.py scripts/governance/validate_oracles.py tests/test_governance_oracles.py tests/fixtures/governance/expected-requirement-ids.txt tests/fixtures/governance/expected-skill-ids.txt tests/fixtures/governance/expected-profile-domain-ids.txt tests/fixtures/governance/expected-provenance-sources.toml tests/fixtures/governance/expected-gate-clauses.toml tests/fixtures/governance/expected-gate-checks.toml docs/audits/2026-07-14-governance-oracle-review.md
