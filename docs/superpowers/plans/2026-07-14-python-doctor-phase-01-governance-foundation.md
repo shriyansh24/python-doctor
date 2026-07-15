@@ -1795,9 +1795,23 @@ package-cache keys are allowed only when root-contained by a trusted
 stdlib/zip/dynamic-loader path and backed by a validated FileFinder/zip loader;
 equivalent trusted finder reconstitution is allowed, but an unknown finder is not.
 Baseline non-project modules must
-retain their object/spec/loader/origin identity; every later non-project module
-must have a built-in, frozen, or validated stdlib/zip/dynamic-loader origin and
-corresponding trusted loader.
+retain every original `sys.modules` key and its object/spec/loader/origin
+identity, including the identity of the dictionary key and the initially
+captured key/spec-name/module-name relationship; equality is never accepted as
+identity. This preserves CPython's pre-existing frozen aliases such as
+`os.path`/`posixpath` only when their original key object and original names are
+unchanged. Every later non-project module must instead satisfy exact
+`sys.modules` key = spec name = module name and have a built-in, frozen, or
+validated stdlib/zip/dynamic-loader origin and corresponding exact loader type.
+Built-in and frozen loaders are accepted only by frozen class identity.
+File-backed loaders bind their exact frozen class, module/spec/loader name,
+path, frozen suffix backend, and origin; zip loaders bind the exact frozen
+`zipimporter` type, archive, normalized prefix, module/spec name, and the exact
+`get_filename()` member origin. Each stage also declares the exact project-
+module set it must leave loaded; deletion of either a baseline module or a
+required project module is a failure. Loader-class references and source,
+bytecode, and extension suffix tuples are captured before repository import
+and never reread from mutable `importlib` module state afterward.
 
 The workflow supervisor launches separate native-test, simulated-test,
 full-module, and validator children; the local supervisor omits the native child
@@ -1825,6 +1839,15 @@ fewer tests than collected; and `expectedFailure`/unexpected-success cases.
 The import-cache regression persists a cache finder for a trusted key and uses
 it to attempt loading a non-prefix repository payload; both the payload origin
 check and the post-stage cache object/fingerprint comparison must fail.
+A dedicated equality-spoofing attribute-object regression and a separate
+`EvilLoader`-subclass-of-`SourceFileLoader` regression must not satisfy identity
+or exact-loader checks. Two more independent regressions delete baseline `json`
+and a stage-required project module from `sys.modules`; both must fail even
+when all remaining modules validate.
+Further cases replace a baseline key with a distinct equal `str`, add an alias
+key for a valid stdlib module, mutate an importlib suffix list before installing
+an injected-suffix `FileFinder`, and mismatch a zip module's declared name from
+the exact `zipimporter.get_filename()` origin; each must fail closed.
 Separate cases reject a new `None` negative-cache entry and a
 purelib/platlib/user-site or `site-packages`/`dist-packages` finder and payload,
 even when that install root is a descendant of stdlib. A positive portable
@@ -2140,6 +2163,15 @@ jobs:
           nonce = sys.argv[3]
           success_code = int(sys.argv[4])
           modules = json.loads(sys.argv[5])
+          required_project_modules_by_stage = {
+              "native": frozenset(("tests", "tests.test_governance_oracles", "scripts", "scripts.governance", "scripts.governance.validate_oracles")),
+              "simulated": frozenset(("tests", "tests.test_governance_oracles", "scripts", "scripts.governance", "scripts.governance.validate_oracles")),
+              "full": frozenset(("tests", "tests.test_governance_oracles", "scripts", "scripts.governance", "scripts.governance.validate_oracles")),
+              "validator": frozenset(("scripts", "scripts.governance", "scripts.governance.validate_oracles")),
+          }
+          required_project_modules = required_project_modules_by_stage.get(stage)
+          if required_project_modules is None:
+              abort()
           stdlib = pathlib.Path(sysconfig.get_path("stdlib")).resolve(strict=True)
           platstdlib = pathlib.Path(sysconfig.get_path("platstdlib")).resolve(strict=True)
           base = pathlib.Path(sys.base_prefix).resolve(strict=True)
@@ -2187,24 +2219,44 @@ jobs:
           for item in closed_path:
               importlib.machinery.PathFinder.find_spec(cache_probe, [item])
 
+          BUILTIN_LOADER = importlib.machinery.BuiltinImporter
+          FROZEN_LOADER = importlib.machinery.FrozenImporter
+          FILE_FINDER = importlib.machinery.FileFinder
+          SOURCE_LOADER = importlib.machinery.SourceFileLoader
+          SOURCE_SUFFIXES = tuple(importlib.machinery.SOURCE_SUFFIXES)
+          BYTECODE_LOADER = importlib.machinery.SourcelessFileLoader
+          BYTECODE_SUFFIXES = tuple(importlib.machinery.BYTECODE_SUFFIXES)
+          EXTENSION_LOADER = importlib.machinery.ExtensionFileLoader
+          EXTENSION_SUFFIXES = tuple(importlib.machinery.EXTENSION_SUFFIXES)
+          ZIP_IMPORTER = zipimport.zipimporter
+          ZIP_GET_FILENAME = ZIP_IMPORTER.get_filename
+          ALLOWED_BACKENDS = (
+              (SOURCE_LOADER, SOURCE_SUFFIXES),
+              (BYTECODE_LOADER, BYTECODE_SUFFIXES),
+              (EXTENSION_LOADER, EXTENSION_SUFFIXES),
+          )
+
           def importer_fingerprint(key, importer):
               if importer is None:
                   return ("none",)
-              if type(importer) is importlib.machinery.FileFinder:
+              if type(importer) is FILE_FINDER:
+                  if type(key) is not str or type(importer.path) is not str:
+                      abort()
                   if pathlib.Path(importer.path).resolve(strict=False) != pathlib.Path(key).resolve(strict=False):
                       abort()
-                  allowed_factories = (
-                      importlib.machinery.SourceFileLoader,
-                      importlib.machinery.SourcelessFileLoader,
-                      importlib.machinery.ExtensionFileLoader,
-                  )
                   if any(
-                      not isinstance(factory, type) or not issubclass(factory, allowed_factories)
-                      for _suffix, factory in importer._loaders
+                      type(suffix) is not str
+                      or not any(
+                          factory is approved_factory and suffix in approved_suffixes
+                          for approved_factory, approved_suffixes in ALLOWED_BACKENDS
+                      )
+                      for suffix, factory in importer._loaders
                   ):
                       abort()
                   return ("file", importer.path, tuple(importer._loaders))
-              if type(importer) is zipimport.zipimporter:
+              if type(importer) is ZIP_IMPORTER:
+                  if type(key) is not str or type(importer.archive) is not str or type(importer.prefix) is not str:
+                      abort()
                   archive = pathlib.Path(importer.archive).resolve(strict=False)
                   prefix = importer.prefix.replace("/", os.sep).replace("\\", os.sep).strip(os.sep)
                   expected_key = archive if not prefix else pathlib.Path(str(archive) + os.sep + prefix)
@@ -2220,7 +2272,7 @@ jobs:
               for key, importer in sys.path_importer_cache.items()
           }
 
-          class ExactLoader(importlib.machinery.SourceFileLoader):
+          class ExactLoader(SOURCE_LOADER):
               def __init__(self, fullname, path, digest):
                   super().__init__(fullname, path)
                   self.digest = digest
@@ -2275,10 +2327,10 @@ jobs:
           )
 
           def trusted_origin(origin):
-              if origin in ("built-in", "frozen"):
-                  return True
-              if not isinstance(origin, str):
+              if type(origin) is not str:
                   return False
+              if origin == "built-in" or origin == "frozen":
+                  return True
               normalized = os.path.normcase(origin)
               if any(
                   normalized == archive or normalized.startswith(archive + os.sep)
@@ -2293,38 +2345,107 @@ jobs:
                   return False
               return any(resolved == base_path or base_path in resolved.parents for base_path in trusted_roots)
 
-          def validate_trusted_module(module):
+          def validate_trusted_module(key, module, baseline_names=None):
               spec = getattr(module, "__spec__", None)
               loader = getattr(module, "__loader__", None)
-              if spec is None or spec.loader is not loader or not trusted_origin(spec.origin):
+              module_name = getattr(module, "__name__", None)
+              module_file = getattr(module, "__file__", None)
+              if (
+                  type(key) is not str
+                  or spec is None
+                  or spec.loader is not loader
+                  or type(spec.name) is not str
+                  or type(module_name) is not str
+                  or not trusted_origin(spec.origin)
+              ):
                   abort()
-              if loader in (importlib.machinery.BuiltinImporter, importlib.machinery.FrozenImporter):
+              if baseline_names is None:
+                  if key != spec.name or spec.name != module_name:
+                      abort()
+              else:
+                  expected_spec_name, expected_module_name = baseline_names
+                  if spec.name is not expected_spec_name or module_name is not expected_module_name:
+                      abort()
+              if loader is BUILTIN_LOADER:
+                  if spec.origin != "built-in" or module_file is not None:
+                      abort()
                   return
-              allowed_loaders = (
-                  importlib.machinery.SourceFileLoader,
-                  importlib.machinery.SourcelessFileLoader,
-                  importlib.machinery.ExtensionFileLoader,
-                  zipimport.zipimporter,
+              if loader is FROZEN_LOADER:
+                  if spec.origin != "frozen":
+                      abort()
+                  if module_file is not None and (type(module_file) is not str or not trusted_origin(module_file)):
+                      abort()
+                  return
+              if type(loader) is ZIP_IMPORTER:
+                  if (
+                      type(loader.archive) is not str
+                      or type(loader.prefix) is not str
+                      or type(spec.origin) is not str
+                      or type(module_file) is not str
+                      or spec.name != module_name
+                      or spec.origin != module_file
+                  ):
+                      abort()
+                  try:
+                      exact_member = ZIP_GET_FILENAME(loader, spec.name)
+                  except (ImportError, OSError, ValueError):
+                      abort()
+                  if type(exact_member) is not str:
+                      abort()
+                  archive = os.path.normcase(str(pathlib.Path(loader.archive).resolve(strict=False)))
+                  prefix = loader.prefix.replace("/", os.sep).replace("\\", os.sep).strip(os.sep)
+                  prefix_root = archive if not prefix else archive + os.sep + prefix
+                  normalized_origin = os.path.normcase(os.path.normpath(spec.origin))
+                  if archive not in trusted_archives or not (
+                      normalized_origin == prefix_root or normalized_origin.startswith(prefix_root + os.sep)
+                  ) or normalized_origin != os.path.normcase(os.path.normpath(exact_member)):
+                      abort()
+                  return
+              backend_suffixes = next(
+                  (suffixes for approved_type, suffixes in ALLOWED_BACKENDS if type(loader) is approved_type),
+                  None,
               )
-              if not isinstance(loader, allowed_loaders):
+              if backend_suffixes is None:
                   abort()
-              loader_path = getattr(loader, "path", getattr(loader, "archive", spec.origin))
-              if not trusted_origin(loader_path):
+              if (
+                  type(loader.name) is not str
+                  or type(loader.path) is not str
+                  or type(spec.origin) is not str
+                  or type(module_file) is not str
+                  or loader.name != spec.name
+                  or spec.name != module_name
+                  or os.path.normcase(os.path.normpath(loader.path)) != os.path.normcase(os.path.normpath(spec.origin))
+                  or os.path.normcase(os.path.normpath(spec.origin)) != os.path.normcase(os.path.normpath(module_file))
+                  or not any(loader.path.endswith(suffix) for suffix in backend_suffixes)
+                  or not trusted_origin(loader.path)
+              ):
                   abort()
 
-          baseline_modules = {}
+          baseline_modules = []
           for name, module in tuple(sys.modules.items()):
+              if type(name) is not str:
+                  abort()
               if name.partition(".")[0] in finder.prefixes:
                   abort()
               spec = getattr(module, "__spec__", None)
               if spec is not None:
-                  validate_trusted_module(module)
-              baseline_modules[name] = (
+                  validate_trusted_module(name, module, (
+                      getattr(spec, "name", None),
+                      getattr(module, "__name__", None),
+                  ))
+              baseline_modules.append((
+                  name,
                   module,
                   spec,
                   getattr(module, "__loader__", None),
                   getattr(module, "__file__", None),
-              )
+                  getattr(spec, "name", None),
+                  getattr(module, "__name__", None),
+              ))
+          baseline_modules = tuple(baseline_modules)
+          baseline_key_identities = {id(entry[0]): entry for entry in baseline_modules}
+          if len(baseline_key_identities) != len(baseline_modules):
+              abort()
 
           def verify_import_state():
               if tuple(sys.path) != closed_path or tuple(sys.path_hooks) != closed_hooks or tuple(sys.meta_path) != closed_meta:
@@ -2340,20 +2461,41 @@ jobs:
                           abort()
                   elif observed_fingerprint == ("none",) or not trusted_origin(key):
                       abort()
-              for name, module in tuple(sys.modules.items()):
+              current_modules = tuple(sys.modules.items())
+              current_by_key_identity = {}
+              for name, module in current_modules:
+                  if type(name) is not str or id(name) in current_by_key_identity:
+                      abort()
+                  current_by_key_identity[id(name)] = (name, module)
+              for expected in baseline_modules:
+                  expected_name, expected_module, expected_spec, expected_loader, expected_file, expected_spec_name, expected_module_name = expected
+                  observed = current_by_key_identity.get(id(expected_name))
+                  if observed is None or observed[0] is not expected_name:
+                      abort()
+                  name, module = observed
+                  if (
+                      module is not expected_module
+                      or getattr(module, "__spec__", None) is not expected_spec
+                      or getattr(module, "__loader__", None) is not expected_loader
+                      or getattr(module, "__file__", None) is not expected_file
+                  ):
+                      abort()
+                  if expected_spec is not None:
+                      validate_trusted_module(name, module, (expected_spec_name, expected_module_name))
+              observed_project_modules = {
+                  name
+                  for name in sys.modules
+                  if type(name) is str and name.partition(".")[0] in finder.prefixes
+              }
+              if observed_project_modules != required_project_modules:
+                  abort()
+              for name, module in current_modules:
                   if name.partition(".")[0] not in finder.prefixes:
-                      if name in baseline_modules:
-                          expected = baseline_modules[name]
-                          observed = (
-                              module,
-                              getattr(module, "__spec__", None),
-                              getattr(module, "__loader__", None),
-                              getattr(module, "__file__", None),
-                          )
-                          if observed != expected:
-                              abort()
+                      baseline_entry = baseline_key_identities.get(id(name))
+                      if baseline_entry is not None and name is baseline_entry[0]:
+                          continue
                       else:
-                          validate_trusted_module(module)
+                          validate_trusted_module(name, module)
                       continue
                   if name not in modules:
                       abort()
@@ -2361,7 +2503,20 @@ jobs:
                   expected = pathlib.Path(raw_path)
                   spec = getattr(module, "__spec__", None)
                   loader = getattr(module, "__loader__", None)
-                  if spec is None or not isinstance(loader, ExactLoader) or spec.loader is not loader:
+                  if (
+                      spec is None
+                      or type(loader) is not ExactLoader
+                      or spec.loader is not loader
+                      or type(spec.name) is not str
+                      or type(module.__name__) is not str
+                      or type(loader.name) is not str
+                      or type(loader.path) is not str
+                      or type(loader.digest) is not str
+                      or spec.name != name
+                      or module.__name__ != name
+                      or loader.name != name
+                      or loader.digest != digest
+                  ):
                       abort()
                   if pathlib.Path(loader.path).resolve(strict=False) != expected:
                       abort()
@@ -2708,6 +2863,15 @@ stage = sys.argv[2]
 nonce = sys.argv[3]
 success_code = int(sys.argv[4])
 modules = json.loads(sys.argv[5])
+required_project_modules_by_stage = {
+    "native": frozenset(("tests", "tests.test_governance_oracles", "scripts", "scripts.governance", "scripts.governance.validate_oracles")),
+    "simulated": frozenset(("tests", "tests.test_governance_oracles", "scripts", "scripts.governance", "scripts.governance.validate_oracles")),
+    "full": frozenset(("tests", "tests.test_governance_oracles", "scripts", "scripts.governance", "scripts.governance.validate_oracles")),
+    "validator": frozenset(("scripts", "scripts.governance", "scripts.governance.validate_oracles")),
+}
+required_project_modules = required_project_modules_by_stage.get(stage)
+if required_project_modules is None:
+    abort()
 stdlib = pathlib.Path(sysconfig.get_path("stdlib")).resolve(strict=True)
 platstdlib = pathlib.Path(sysconfig.get_path("platstdlib")).resolve(strict=True)
 base = pathlib.Path(sys.base_prefix).resolve(strict=True)
@@ -2755,24 +2919,44 @@ cache_probe = "_python_doctor_closed_cache_probe_"
 for item in closed_path:
     importlib.machinery.PathFinder.find_spec(cache_probe, [item])
 
+BUILTIN_LOADER = importlib.machinery.BuiltinImporter
+FROZEN_LOADER = importlib.machinery.FrozenImporter
+FILE_FINDER = importlib.machinery.FileFinder
+SOURCE_LOADER = importlib.machinery.SourceFileLoader
+SOURCE_SUFFIXES = tuple(importlib.machinery.SOURCE_SUFFIXES)
+BYTECODE_LOADER = importlib.machinery.SourcelessFileLoader
+BYTECODE_SUFFIXES = tuple(importlib.machinery.BYTECODE_SUFFIXES)
+EXTENSION_LOADER = importlib.machinery.ExtensionFileLoader
+EXTENSION_SUFFIXES = tuple(importlib.machinery.EXTENSION_SUFFIXES)
+ZIP_IMPORTER = zipimport.zipimporter
+ZIP_GET_FILENAME = ZIP_IMPORTER.get_filename
+ALLOWED_BACKENDS = (
+    (SOURCE_LOADER, SOURCE_SUFFIXES),
+    (BYTECODE_LOADER, BYTECODE_SUFFIXES),
+    (EXTENSION_LOADER, EXTENSION_SUFFIXES),
+)
+
 def importer_fingerprint(key, importer):
     if importer is None:
         return ("none",)
-    if type(importer) is importlib.machinery.FileFinder:
+    if type(importer) is FILE_FINDER:
+        if type(key) is not str or type(importer.path) is not str:
+            abort()
         if pathlib.Path(importer.path).resolve(strict=False) != pathlib.Path(key).resolve(strict=False):
             abort()
-        allowed_factories = (
-            importlib.machinery.SourceFileLoader,
-            importlib.machinery.SourcelessFileLoader,
-            importlib.machinery.ExtensionFileLoader,
-        )
         if any(
-            not isinstance(factory, type) or not issubclass(factory, allowed_factories)
-            for _suffix, factory in importer._loaders
+            type(suffix) is not str
+            or not any(
+                factory is approved_factory and suffix in approved_suffixes
+                for approved_factory, approved_suffixes in ALLOWED_BACKENDS
+            )
+            for suffix, factory in importer._loaders
         ):
             abort()
         return ("file", importer.path, tuple(importer._loaders))
-    if type(importer) is zipimport.zipimporter:
+    if type(importer) is ZIP_IMPORTER:
+        if type(key) is not str or type(importer.archive) is not str or type(importer.prefix) is not str:
+            abort()
         archive = pathlib.Path(importer.archive).resolve(strict=False)
         prefix = importer.prefix.replace("/", os.sep).replace("\\", os.sep).strip(os.sep)
         expected_key = archive if not prefix else pathlib.Path(str(archive) + os.sep + prefix)
@@ -2788,7 +2972,7 @@ closed_importer_cache = {
     for key, importer in sys.path_importer_cache.items()
 }
 
-class ExactLoader(importlib.machinery.SourceFileLoader):
+class ExactLoader(SOURCE_LOADER):
     def __init__(self, fullname, path, digest):
         super().__init__(fullname, path)
         self.digest = digest
@@ -2843,10 +3027,10 @@ trusted_archives = tuple(
 )
 
 def trusted_origin(origin):
-    if origin in ("built-in", "frozen"):
-        return True
-    if not isinstance(origin, str):
+    if type(origin) is not str:
         return False
+    if origin == "built-in" or origin == "frozen":
+        return True
     normalized = os.path.normcase(origin)
     if any(
         normalized == archive or normalized.startswith(archive + os.sep)
@@ -2861,38 +3045,107 @@ def trusted_origin(origin):
         return False
     return any(resolved == base_path or base_path in resolved.parents for base_path in trusted_roots)
 
-def validate_trusted_module(module):
+def validate_trusted_module(key, module, baseline_names=None):
     spec = getattr(module, "__spec__", None)
     loader = getattr(module, "__loader__", None)
-    if spec is None or spec.loader is not loader or not trusted_origin(spec.origin):
+    module_name = getattr(module, "__name__", None)
+    module_file = getattr(module, "__file__", None)
+    if (
+        type(key) is not str
+        or spec is None
+        or spec.loader is not loader
+        or type(spec.name) is not str
+        or type(module_name) is not str
+        or not trusted_origin(spec.origin)
+    ):
         abort()
-    if loader in (importlib.machinery.BuiltinImporter, importlib.machinery.FrozenImporter):
+    if baseline_names is None:
+        if key != spec.name or spec.name != module_name:
+            abort()
+    else:
+        expected_spec_name, expected_module_name = baseline_names
+        if spec.name is not expected_spec_name or module_name is not expected_module_name:
+            abort()
+    if loader is BUILTIN_LOADER:
+        if spec.origin != "built-in" or module_file is not None:
+            abort()
         return
-    allowed_loaders = (
-        importlib.machinery.SourceFileLoader,
-        importlib.machinery.SourcelessFileLoader,
-        importlib.machinery.ExtensionFileLoader,
-        zipimport.zipimporter,
+    if loader is FROZEN_LOADER:
+        if spec.origin != "frozen":
+            abort()
+        if module_file is not None and (type(module_file) is not str or not trusted_origin(module_file)):
+            abort()
+        return
+    if type(loader) is ZIP_IMPORTER:
+        if (
+            type(loader.archive) is not str
+            or type(loader.prefix) is not str
+            or type(spec.origin) is not str
+            or type(module_file) is not str
+            or spec.name != module_name
+            or spec.origin != module_file
+        ):
+            abort()
+        try:
+            exact_member = ZIP_GET_FILENAME(loader, spec.name)
+        except (ImportError, OSError, ValueError):
+            abort()
+        if type(exact_member) is not str:
+            abort()
+        archive = os.path.normcase(str(pathlib.Path(loader.archive).resolve(strict=False)))
+        prefix = loader.prefix.replace("/", os.sep).replace("\\", os.sep).strip(os.sep)
+        prefix_root = archive if not prefix else archive + os.sep + prefix
+        normalized_origin = os.path.normcase(os.path.normpath(spec.origin))
+        if archive not in trusted_archives or not (
+            normalized_origin == prefix_root or normalized_origin.startswith(prefix_root + os.sep)
+        ) or normalized_origin != os.path.normcase(os.path.normpath(exact_member)):
+            abort()
+        return
+    backend_suffixes = next(
+        (suffixes for approved_type, suffixes in ALLOWED_BACKENDS if type(loader) is approved_type),
+        None,
     )
-    if not isinstance(loader, allowed_loaders):
+    if backend_suffixes is None:
         abort()
-    loader_path = getattr(loader, "path", getattr(loader, "archive", spec.origin))
-    if not trusted_origin(loader_path):
+    if (
+        type(loader.name) is not str
+        or type(loader.path) is not str
+        or type(spec.origin) is not str
+        or type(module_file) is not str
+        or loader.name != spec.name
+        or spec.name != module_name
+        or os.path.normcase(os.path.normpath(loader.path)) != os.path.normcase(os.path.normpath(spec.origin))
+        or os.path.normcase(os.path.normpath(spec.origin)) != os.path.normcase(os.path.normpath(module_file))
+        or not any(loader.path.endswith(suffix) for suffix in backend_suffixes)
+        or not trusted_origin(loader.path)
+    ):
         abort()
 
-baseline_modules = {}
+baseline_modules = []
 for name, module in tuple(sys.modules.items()):
+    if type(name) is not str:
+        abort()
     if name.partition(".")[0] in finder.prefixes:
         abort()
     spec = getattr(module, "__spec__", None)
     if spec is not None:
-        validate_trusted_module(module)
-    baseline_modules[name] = (
+        validate_trusted_module(name, module, (
+            getattr(spec, "name", None),
+            getattr(module, "__name__", None),
+        ))
+    baseline_modules.append((
+        name,
         module,
         spec,
         getattr(module, "__loader__", None),
         getattr(module, "__file__", None),
-    )
+        getattr(spec, "name", None),
+        getattr(module, "__name__", None),
+    ))
+baseline_modules = tuple(baseline_modules)
+baseline_key_identities = {id(entry[0]): entry for entry in baseline_modules}
+if len(baseline_key_identities) != len(baseline_modules):
+    abort()
 
 def verify_import_state():
     if tuple(sys.path) != closed_path or tuple(sys.path_hooks) != closed_hooks or tuple(sys.meta_path) != closed_meta:
@@ -2908,20 +3161,41 @@ def verify_import_state():
                 abort()
         elif observed_fingerprint == ("none",) or not trusted_origin(key):
             abort()
-    for name, module in tuple(sys.modules.items()):
+    current_modules = tuple(sys.modules.items())
+    current_by_key_identity = {}
+    for name, module in current_modules:
+        if type(name) is not str or id(name) in current_by_key_identity:
+            abort()
+        current_by_key_identity[id(name)] = (name, module)
+    for expected in baseline_modules:
+        expected_name, expected_module, expected_spec, expected_loader, expected_file, expected_spec_name, expected_module_name = expected
+        observed = current_by_key_identity.get(id(expected_name))
+        if observed is None or observed[0] is not expected_name:
+            abort()
+        name, module = observed
+        if (
+            module is not expected_module
+            or getattr(module, "__spec__", None) is not expected_spec
+            or getattr(module, "__loader__", None) is not expected_loader
+            or getattr(module, "__file__", None) is not expected_file
+        ):
+            abort()
+        if expected_spec is not None:
+            validate_trusted_module(name, module, (expected_spec_name, expected_module_name))
+    observed_project_modules = {
+        name
+        for name in sys.modules
+        if type(name) is str and name.partition(".")[0] in finder.prefixes
+    }
+    if observed_project_modules != required_project_modules:
+        abort()
+    for name, module in current_modules:
         if name.partition(".")[0] not in finder.prefixes:
-            if name in baseline_modules:
-                expected = baseline_modules[name]
-                observed = (
-                    module,
-                    getattr(module, "__spec__", None),
-                    getattr(module, "__loader__", None),
-                    getattr(module, "__file__", None),
-                )
-                if observed != expected:
-                    abort()
+            baseline_entry = baseline_key_identities.get(id(name))
+            if baseline_entry is not None and name is baseline_entry[0]:
+                continue
             else:
-                validate_trusted_module(module)
+                validate_trusted_module(name, module)
             continue
         if name not in modules:
             abort()
@@ -2929,7 +3203,20 @@ def verify_import_state():
         expected = pathlib.Path(raw_path)
         spec = getattr(module, "__spec__", None)
         loader = getattr(module, "__loader__", None)
-        if spec is None or not isinstance(loader, ExactLoader) or spec.loader is not loader:
+        if (
+            spec is None
+            or type(loader) is not ExactLoader
+            or spec.loader is not loader
+            or type(spec.name) is not str
+            or type(module.__name__) is not str
+            or type(loader.name) is not str
+            or type(loader.path) is not str
+            or type(loader.digest) is not str
+            or spec.name != name
+            or module.__name__ != name
+            or loader.name != name
+            or loader.digest != digest
+        ):
             abort()
         if pathlib.Path(loader.path).resolve(strict=False) != expected:
             abort()
