@@ -1,0 +1,77 @@
+name: Governance oracles on Windows
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/governance-oracles-windows.yml"
+      - "docs/**"
+      - "scripts/governance/**"
+      - "tests/fixtures/governance/**"
+      - "tests/test_governance_oracles.py"
+  push:
+    branches:
+      - "agent/phase-01-governance"
+    paths:
+      - ".github/workflows/governance-oracles-windows.yml"
+      - "docs/**"
+      - "scripts/governance/**"
+      - "tests/fixtures/governance/**"
+      - "tests/test_governance_oracles.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  governance-oracles-windows:
+    name: CPython ${{ matrix.python-version }} / windows-2022
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.9.13"
+          - "3.10.11"
+          - "3.11.9"
+          - "3.12.10"
+          - "3.13.14"
+          - "3.14.6"
+    steps:
+      - name: Check out the immutable subject
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Select the matrix interpreter
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: "x64"
+          check-latest: false
+      - name: Run mandatory native, simulated, and full oracle tests
+        shell: pwsh
+        env:
+          PYTHONPATH: "src;."
+        run: |
+          @'
+          import sys
+          import unittest
+
+          required = (
+              "tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip",
+              "tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level",
+          )
+
+          def run_zero_skip(name: str, expected_count=None) -> bool:
+              suite = unittest.defaultTestLoader.loadTestsFromName(name)
+              if expected_count is not None and suite.countTestCases() != expected_count:
+                  return False
+              result = unittest.TextTestRunner(verbosity=2).run(suite)
+              skip_count = len(result.skipped)
+              return result.wasSuccessful() and skip_count == 0
+
+          required_results = tuple(run_zero_skip(name, 1) for name in required)
+          success = all(required_results)
+          success = run_zero_skip("tests.test_governance_oracles") and success
+          raise SystemExit(0 if success else 1)
+          '@ | python -

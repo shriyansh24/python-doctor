@@ -1,0 +1,3 @@
+schema_version = "provenance-source-oracle/v1"
+required_record_fields = ["source_id", "url", "immutable_revision", "license_id", "license_path", "license_sha256", "inspected_paths", "concepts", "disposition", "attribution"]
+source_ids = ["agent-skills-spec", "anthropic-skills", "bandit-docs", "github-awesome-copilot", "huggingface-skills", "hypothesis-docs", "microsoft-python-guidance", "mypy-docs", "openai-skills", "pep-0008", "pep-0020", "pep-0257", "power-of-ten-user-supplied-pdf", "pypa-specifications", "pytest-docs", "python-language-reference", "python-typing-guidance", "restricted-react-doctor-reference", "ruff-docs", "superpowers-skills", "trailofbits-skills", "wshobson-agents"]

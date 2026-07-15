@@ -1,0 +1,1249 @@
+schema_version = "gate-check-oracle/v1"
+order = "task-09-source-order"
+truth_criteria_registry = ["applicability_independently_reviewed", "candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "external_blocker_evidenced", "predeclared_machine_fact_false", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+artifact_class_registry = ["artifact_identity", "attestation", "benchmark", "build_artifact", "compatibility_matrix", "coverage", "documentation", "gate_evidence", "legal_review", "manifest", "mutation_report", "network_trace", "package_install", "provenance", "repository_state", "review_findings", "schema_validation", "skill_evaluation", "test_report"]
+state_truth = { PASS = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"], NOT_APPLICABLE = ["applicability_independently_reviewed", "candidate_identity_matches", "predeclared_machine_fact_false", "source_clause_digest_matches", "structured_child_result_valid"], BLOCKED = ["candidate_identity_matches", "external_blocker_evidenced", "source_clause_digest_matches", "structured_child_result_valid"] }
+externally_blockable_check_ids = ["G00-LEGAL-PERMISSION", "G05-INSTALLED-WHEEL-CELLS", "G05-PR-MATRIX", "G05-RELEASE-MATRIX", "G11-MODEL-TRIALS", "G12-PLATFORM-CONTAINMENT", "G20-POST-PUBLISH-SMOKE", "G20-REMOTE-TREE-PARITY"]
+
+[[checks]]
+check_id = "G00-CLEAN-TREE"
+gate_id = "G00"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ARC-04", "DOC-01", "LEG-01", "LEG-02", "LEG-03", "LEG-05", "LEG-06", "PRIV-01", "QA-01", "QA-02", "REL-01", "REL-03", "SKL-01"]
+clause_ids = ["validation:G00"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "legal_review", "manifest", "provenance", "repository_state"]
+
+[[checks]]
+check_id = "G00-REPOSITORY-HYGIENE"
+gate_id = "G00"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ARC-04", "DOC-01", "LEG-01", "LEG-02", "LEG-03", "LEG-05", "LEG-06", "PRIV-01", "QA-01", "QA-02", "REL-01", "REL-03", "SKL-01"]
+clause_ids = ["validation:G00"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "legal_review", "manifest", "provenance", "repository_state"]
+
+[[checks]]
+check_id = "G00-PROVENANCE-INVENTORY"
+gate_id = "G00"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ARC-04", "DOC-01", "LEG-01", "LEG-02", "LEG-03", "LEG-05", "LEG-06", "PRIV-01", "QA-01", "QA-02", "REL-01", "REL-03", "SKL-01"]
+clause_ids = ["validation:G00"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "legal_review", "manifest", "provenance", "repository_state"]
+
+[[checks]]
+check_id = "G00-RESTRICTED-EXPOSURE"
+gate_id = "G00"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ARC-04", "DOC-01", "LEG-01", "LEG-02", "LEG-03", "LEG-05", "LEG-06", "PRIV-01", "QA-01", "QA-02", "REL-01", "REL-03", "SKL-01"]
+clause_ids = ["validation:G00"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "legal_review", "manifest", "provenance", "repository_state"]
+
+[[checks]]
+check_id = "G00-LEGAL-PERMISSION"
+gate_id = "G00"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ARC-04", "DOC-01", "LEG-01", "LEG-02", "LEG-03", "LEG-05", "LEG-06", "PRIV-01", "QA-01", "QA-02", "REL-01", "REL-03", "SKL-01"]
+clause_ids = ["validation:G00"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "legal_review", "manifest", "provenance", "repository_state"]
+
+[[checks]]
+check_id = "G00-PRIVACY-SCOPE"
+gate_id = "G00"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ARC-04", "DOC-01", "LEG-01", "LEG-02", "LEG-03", "LEG-05", "LEG-06", "PRIV-01", "QA-01", "QA-02", "REL-01", "REL-03", "SKL-01"]
+clause_ids = ["validation:G00"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "legal_review", "manifest", "provenance", "repository_state"]
+
+[[checks]]
+check_id = "G00-METADATA-SCHEMA-CONSISTENCY"
+gate_id = "G00"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ARC-04", "DOC-01", "LEG-01", "LEG-02", "LEG-03", "LEG-05", "LEG-06", "PRIV-01", "QA-01", "QA-02", "REL-01", "REL-03", "SKL-01"]
+clause_ids = ["validation:G00"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "legal_review", "manifest", "provenance", "repository_state"]
+
+[[checks]]
+check_id = "G00-IMMUTABLE-ACTIONS"
+gate_id = "G00"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ARC-04", "DOC-01", "LEG-01", "LEG-02", "LEG-03", "LEG-05", "LEG-06", "PRIV-01", "QA-01", "QA-02", "REL-01", "REL-03", "SKL-01"]
+clause_ids = ["validation:G00"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "legal_review", "manifest", "provenance", "repository_state"]
+
+[[checks]]
+check_id = "G01-GRAMMAR-COMPILE"
+gate_id = "G01"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ARC-03", "CORE-03", "QA-01"]
+clause_ids = ["validation:G01"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G01-FORMAT-RUFF"
+gate_id = "G01"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ARC-03", "CORE-03", "QA-01"]
+clause_ids = ["validation:G01"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G01-STRICT-TYPES"
+gate_id = "G01"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ARC-03", "CORE-03", "QA-01"]
+clause_ids = ["validation:G01"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G01-WARNINGS-AS-ERRORS"
+gate_id = "G01"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ARC-03", "CORE-03", "QA-01"]
+clause_ids = ["validation:G01"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G01-SUPPRESSION-FILTER-AUDIT"
+gate_id = "G01"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ARC-03", "CORE-03", "QA-01"]
+clause_ids = ["validation:G01"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G02-UNIT-INTEGRATION"
+gate_id = "G02"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ADP-02", "API-03", "CORE-01", "CORE-05", "QA-01", "QA-02", "QA-03"]
+clause_ids = ["validation:G02"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["coverage", "gate_evidence", "mutation_report", "test_report"]
+
+[[checks]]
+check_id = "G02-COLLECTION-MANIFEST"
+gate_id = "G02"
+required = true
+scheduled_phase = 2
+schedule_state = "planned"
+requirement_ids = ["ADP-02", "API-03", "CORE-01", "CORE-05", "QA-01", "QA-02", "QA-03"]
+clause_ids = ["validation:G02"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["coverage", "gate_evidence", "mutation_report", "test_report"]
+
+[[checks]]
+check_id = "G02-COVERAGE-THRESHOLDS"
+gate_id = "G02"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ADP-02", "API-03", "CORE-01", "CORE-05", "QA-01", "QA-02", "QA-03"]
+clause_ids = ["validation:G02"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["coverage", "gate_evidence", "mutation_report", "test_report"]
+
+[[checks]]
+check_id = "G02-CRITICAL-BRANCH-COVERAGE"
+gate_id = "G02"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ADP-02", "API-03", "CORE-01", "CORE-05", "QA-01", "QA-02", "QA-03"]
+clause_ids = ["validation:G02"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["coverage", "gate_evidence", "mutation_report", "test_report"]
+
+[[checks]]
+check_id = "G02-CHANGED-CRITICAL-MUTATION"
+gate_id = "G02"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ADP-02", "API-03", "CORE-01", "CORE-05", "QA-01", "QA-02", "QA-03"]
+clause_ids = ["validation:G02"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["coverage", "gate_evidence", "mutation_report", "test_report"]
+
+[[checks]]
+check_id = "G03-DEPENDENCY-DAG"
+gate_id = "G03"
+required = true
+scheduled_phase = 2
+schedule_state = "planned"
+requirement_ids = ["ADP-01", "ADP-04", "ADP-05", "API-01", "ARC-01", "ARC-02", "ARC-04", "DED-03", "EDT-03", "LSP-01", "PRIV-02", "QA-01"]
+clause_ids = ["validation:G03"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G03-IMPORT-BOUNDARIES"
+gate_id = "G03"
+required = true
+scheduled_phase = 2
+schedule_state = "planned"
+requirement_ids = ["ADP-01", "ADP-04", "ADP-05", "API-01", "ARC-01", "ARC-02", "ARC-04", "DED-03", "EDT-03", "LSP-01", "PRIV-02", "QA-01"]
+clause_ids = ["validation:G03"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G03-INDEPENDENT-DISTRIBUTIONS"
+gate_id = "G03"
+required = true
+scheduled_phase = 2
+schedule_state = "planned"
+requirement_ids = ["ADP-01", "ADP-04", "ADP-05", "API-01", "ARC-01", "ARC-02", "ARC-04", "DED-03", "EDT-03", "LSP-01", "PRIV-02", "QA-01"]
+clause_ids = ["validation:G03"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G03-ENGINE-PARITY"
+gate_id = "G03"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ADP-01", "ADP-04", "ADP-05", "API-01", "ARC-01", "ARC-02", "ARC-04", "DED-03", "EDT-03", "LSP-01", "PRIV-02", "QA-01"]
+clause_ids = ["validation:G03"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G04-PUBLIC-API"
+gate_id = "G04"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-03", "ADP-01", "ADP-02", "ADP-05", "API-01", "API-03", "CLI-01", "CLI-02", "CLI-04", "CORE-02", "CORE-04", "CORE-05", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "LSP-01", "NASA-01", "NASA-11", "NASA-12", "QA-01", "REL-01", "REP-01", "REP-02", "REP-05"]
+clause_ids = ["validation:G04"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "schema_validation", "test_report"]
+
+[[checks]]
+check_id = "G04-SCHEMAS"
+gate_id = "G04"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ACT-01", "ACT-03", "ADP-01", "ADP-02", "ADP-05", "API-01", "API-03", "CLI-01", "CLI-02", "CLI-04", "CORE-02", "CORE-04", "CORE-05", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "LSP-01", "NASA-01", "NASA-11", "NASA-12", "QA-01", "REL-01", "REP-01", "REP-02", "REP-05"]
+clause_ids = ["validation:G04"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "schema_validation", "test_report"]
+
+[[checks]]
+check_id = "G04-DIAGNOSTIC-IDENTITY"
+gate_id = "G04"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-03", "ADP-01", "ADP-02", "ADP-05", "API-01", "API-03", "CLI-01", "CLI-02", "CLI-04", "CORE-02", "CORE-04", "CORE-05", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "LSP-01", "NASA-01", "NASA-11", "NASA-12", "QA-01", "REL-01", "REP-01", "REP-02", "REP-05"]
+clause_ids = ["validation:G04"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "schema_validation", "test_report"]
+
+[[checks]]
+check_id = "G04-CLI-GOLDENS"
+gate_id = "G04"
+required = true
+scheduled_phase = 7
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-03", "ADP-01", "ADP-02", "ADP-05", "API-01", "API-03", "CLI-01", "CLI-02", "CLI-04", "CORE-02", "CORE-04", "CORE-05", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "LSP-01", "NASA-01", "NASA-11", "NASA-12", "QA-01", "REL-01", "REP-01", "REP-02", "REP-05"]
+clause_ids = ["validation:G04"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "schema_validation", "test_report"]
+
+[[checks]]
+check_id = "G04-BREAKING-CHANGE-PROTOCOL"
+gate_id = "G04"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-03", "ADP-01", "ADP-02", "ADP-05", "API-01", "API-03", "CLI-01", "CLI-02", "CLI-04", "CORE-02", "CORE-04", "CORE-05", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "LSP-01", "NASA-01", "NASA-11", "NASA-12", "QA-01", "REL-01", "REP-01", "REP-02", "REP-05"]
+clause_ids = ["validation:G04"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "schema_validation", "test_report"]
+
+[[checks]]
+check_id = "G05-PR-MATRIX"
+gate_id = "G05"
+required = true
+scheduled_phase = 5
+schedule_state = "planned"
+requirement_ids = ["API-01", "ARC-03", "CLI-01", "CORE-01", "CORE-03", "NASA-06", "PKG-03", "QA-01"]
+clause_ids = ["validation:G05"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["compatibility_matrix", "gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G05-RELEASE-MATRIX"
+gate_id = "G05"
+required = true
+scheduled_phase = 5
+schedule_state = "planned"
+requirement_ids = ["API-01", "ARC-03", "CLI-01", "CORE-01", "CORE-03", "NASA-06", "PKG-03", "QA-01"]
+clause_ids = ["validation:G05"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["compatibility_matrix", "gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G05-INSTALLED-WHEEL-CELLS"
+gate_id = "G05"
+required = true
+scheduled_phase = 5
+schedule_state = "planned"
+requirement_ids = ["API-01", "ARC-03", "CLI-01", "CORE-01", "CORE-03", "NASA-06", "PKG-03", "QA-01"]
+clause_ids = ["validation:G05"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["compatibility_matrix", "gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G05-TARGET-GRAMMARS"
+gate_id = "G05"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["API-01", "ARC-03", "CLI-01", "CORE-01", "CORE-03", "NASA-06", "PKG-03", "QA-01"]
+clause_ids = ["validation:G05"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["compatibility_matrix", "gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G05-INTEGRATION-RANGES"
+gate_id = "G05"
+required = true
+scheduled_phase = 5
+schedule_state = "planned"
+requirement_ids = ["API-01", "ARC-03", "CLI-01", "CORE-01", "CORE-03", "NASA-06", "PKG-03", "QA-01"]
+clause_ids = ["validation:G05"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["compatibility_matrix", "gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G05-ALT-RUNTIME-TIERS"
+gate_id = "G05"
+required = true
+scheduled_phase = 5
+schedule_state = "planned"
+requirement_ids = ["API-01", "ARC-03", "CLI-01", "CORE-01", "CORE-03", "NASA-06", "PKG-03", "QA-01"]
+clause_ids = ["validation:G05"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["compatibility_matrix", "gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G06-RULE-CONTRACTS"
+gate_id = "G06"
+required = true
+scheduled_phase = 4
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "CORE-07", "DED-01", "DED-02", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-04", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G06"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G06-LOCATIONS-REMEDIATION"
+gate_id = "G06"
+required = true
+scheduled_phase = 4
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "CORE-07", "DED-01", "DED-02", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-04", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G06"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G06-NONGOALS-FALSE-POSITIVES"
+gate_id = "G06"
+required = true
+scheduled_phase = 4
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "CORE-07", "DED-01", "DED-02", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-04", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G06"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G06-FIX-IDEMPOTENCE"
+gate_id = "G06"
+required = true
+scheduled_phase = 4
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "CORE-07", "DED-01", "DED-02", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-04", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G06"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G06-PRECISION-THRESHOLDS"
+gate_id = "G06"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "CORE-07", "DED-01", "DED-02", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-04", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G06"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G06-SAFETY-RECALL"
+gate_id = "G06"
+required = true
+scheduled_phase = 6
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "CORE-07", "DED-01", "DED-02", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-04", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G06"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G07-DETERMINISTIC-GENERATORS"
+gate_id = "G07"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-03", "CORE-02", "CORE-03", "CORE-04", "CORE-05", "CORE-06", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "DED-01", "DED-02", "FUZ-01", "FUZ-02", "FUZ-03", "LSP-02", "LSP-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "PRIV-04", "QA-01", "QA-04", "REP-01", "REP-03"]
+clause_ids = ["validation:G07"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G07-HOSTILE-INPUTS"
+gate_id = "G07"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-03", "CORE-02", "CORE-03", "CORE-04", "CORE-05", "CORE-06", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "DED-01", "DED-02", "FUZ-01", "FUZ-02", "FUZ-03", "LSP-02", "LSP-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "PRIV-04", "QA-01", "QA-04", "REP-01", "REP-03"]
+clause_ids = ["validation:G07"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G07-INVARIANTS"
+gate_id = "G07"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-03", "CORE-02", "CORE-03", "CORE-04", "CORE-05", "CORE-06", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "DED-01", "DED-02", "FUZ-01", "FUZ-02", "FUZ-03", "LSP-02", "LSP-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "PRIV-04", "QA-01", "QA-04", "REP-01", "REP-03"]
+clause_ids = ["validation:G07"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G07-INCOMPLETE-FAIL-CLOSED"
+gate_id = "G07"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-03", "CORE-02", "CORE-03", "CORE-04", "CORE-05", "CORE-06", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "DED-01", "DED-02", "FUZ-01", "FUZ-02", "FUZ-03", "LSP-02", "LSP-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "PRIV-04", "QA-01", "QA-04", "REP-01", "REP-03"]
+clause_ids = ["validation:G07"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G07-MINIMIZED-SEEDS"
+gate_id = "G07"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-03", "CORE-02", "CORE-03", "CORE-04", "CORE-05", "CORE-06", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "DED-01", "DED-02", "FUZ-01", "FUZ-02", "FUZ-03", "LSP-02", "LSP-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "PRIV-04", "QA-01", "QA-04", "REP-01", "REP-03"]
+clause_ids = ["validation:G07"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G08-CHANGED-CRITICAL-MUTANTS"
+gate_id = "G08"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["CLI-02", "CORE-05", "CORE-10", "FUZ-02", "LSP-03", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-03"]
+clause_ids = ["validation:G08"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "mutation_report"]
+
+[[checks]]
+check_id = "G08-WHOLE-SUITE-MUTATION"
+gate_id = "G08"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["CLI-02", "CORE-05", "CORE-10", "FUZ-02", "LSP-03", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-03"]
+clause_ids = ["validation:G08"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "mutation_report"]
+
+[[checks]]
+check_id = "G08-EQUIVALENT-MUTANT-REVIEW"
+gate_id = "G08"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["CLI-02", "CORE-05", "CORE-10", "FUZ-02", "LSP-03", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-03"]
+clause_ids = ["validation:G08"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "mutation_report"]
+
+[[checks]]
+check_id = "G09-LAYOUT-WORKFLOWS"
+gate_id = "G09"
+required = true
+scheduled_phase = 2
+schedule_state = "planned"
+requirement_ids = ["ADP-01", "ADP-02", "ADP-05", "API-02", "API-03", "ARC-01", "CLI-01", "CLI-02", "CLI-03", "CORE-01", "CORE-02", "CORE-04", "CORE-06", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "NASA-11", "PKG-03", "PRIV-03", "QA-01", "QA-06", "REP-01", "REP-02", "REP-04", "REP-05"]
+clause_ids = ["validation:G09"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G09-ANALYZER-FAILURES"
+gate_id = "G09"
+required = true
+scheduled_phase = 4
+schedule_state = "planned"
+requirement_ids = ["ADP-01", "ADP-02", "ADP-05", "API-02", "API-03", "ARC-01", "CLI-01", "CLI-02", "CLI-03", "CORE-01", "CORE-02", "CORE-04", "CORE-06", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "NASA-11", "PKG-03", "PRIV-03", "QA-01", "QA-06", "REP-01", "REP-02", "REP-04", "REP-05"]
+clause_ids = ["validation:G09"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G09-CONFIG-STDIN-REPORTS"
+gate_id = "G09"
+required = true
+scheduled_phase = 2
+schedule_state = "planned"
+requirement_ids = ["ADP-01", "ADP-02", "ADP-05", "API-02", "API-03", "ARC-01", "CLI-01", "CLI-02", "CLI-03", "CORE-01", "CORE-02", "CORE-04", "CORE-06", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "NASA-11", "PKG-03", "PRIV-03", "QA-01", "QA-06", "REP-01", "REP-02", "REP-04", "REP-05"]
+clause_ids = ["validation:G09"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G09-FIX-ROLLBACK-CONCURRENCY"
+gate_id = "G09"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ADP-01", "ADP-02", "ADP-05", "API-02", "API-03", "ARC-01", "CLI-01", "CLI-02", "CLI-03", "CORE-01", "CORE-02", "CORE-04", "CORE-06", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "NASA-11", "PKG-03", "PRIV-03", "QA-01", "QA-06", "REP-01", "REP-02", "REP-04", "REP-05"]
+clause_ids = ["validation:G09"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G09-PARTIAL-NEVER-CLEAN"
+gate_id = "G09"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ADP-01", "ADP-02", "ADP-05", "API-02", "API-03", "ARC-01", "CLI-01", "CLI-02", "CLI-03", "CORE-01", "CORE-02", "CORE-04", "CORE-06", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "NASA-11", "PKG-03", "PRIV-03", "QA-01", "QA-06", "REP-01", "REP-02", "REP-04", "REP-05"]
+clause_ids = ["validation:G09"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "package_install", "test_report"]
+
+[[checks]]
+check_id = "G10-CORPUS-PROVENANCE"
+gate_id = "G10"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-05", "CORE-07", "DED-01", "DED-02", "FUZ-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "QA-01", "QA-04", "QA-06", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G10"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G10-PER-RULE-PRECISION"
+gate_id = "G10"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-05", "CORE-07", "DED-01", "DED-02", "FUZ-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "QA-01", "QA-04", "QA-06", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G10"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G10-ACCEPTED-FINDING-DELTAS"
+gate_id = "G10"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-05", "CORE-07", "DED-01", "DED-02", "FUZ-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "QA-01", "QA-04", "QA-06", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G10"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G10-RESOURCE-EVIDENCE"
+gate_id = "G10"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-05", "CORE-07", "DED-01", "DED-02", "FUZ-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "QA-01", "QA-04", "QA-06", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G10"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G10-BASELINE-REVIEW"
+gate_id = "G10"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ADP-05", "CORE-07", "DED-01", "DED-02", "FUZ-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "QA-01", "QA-04", "QA-06", "SKL-04", "SKL-05"]
+clause_ids = ["validation:G10"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G11-SKILL-SCHEMA"
+gate_id = "G11"
+required = true
+scheduled_phase = 8
+schedule_state = "planned"
+requirement_ids = ["CLI-03", "PRIV-02", "QA-01", "SKL-01", "SKL-02", "SKL-03", "SKL-04", "SKL-05", "SKL-06", "SKL-07"]
+clause_ids = ["validation:G11"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "skill_evaluation", "test_report"]
+
+[[checks]]
+check_id = "G11-ROUTING-BUDGETS"
+gate_id = "G11"
+required = true
+scheduled_phase = 8
+schedule_state = "planned"
+requirement_ids = ["CLI-03", "PRIV-02", "QA-01", "SKL-01", "SKL-02", "SKL-03", "SKL-04", "SKL-05", "SKL-06", "SKL-07"]
+clause_ids = ["validation:G11"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "skill_evaluation", "test_report"]
+
+[[checks]]
+check_id = "G11-AUTHORITY-SAFETY"
+gate_id = "G11"
+required = true
+scheduled_phase = 8
+schedule_state = "planned"
+requirement_ids = ["CLI-03", "PRIV-02", "QA-01", "SKL-01", "SKL-02", "SKL-03", "SKL-04", "SKL-05", "SKL-06", "SKL-07"]
+clause_ids = ["validation:G11"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "skill_evaluation", "test_report"]
+
+[[checks]]
+check_id = "G11-PRESSURE-GUARDRAILS"
+gate_id = "G11"
+required = true
+scheduled_phase = 9
+schedule_state = "planned"
+requirement_ids = ["CLI-03", "PRIV-02", "QA-01", "SKL-01", "SKL-02", "SKL-03", "SKL-04", "SKL-05", "SKL-06", "SKL-07"]
+clause_ids = ["validation:G11"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "skill_evaluation", "test_report"]
+
+[[checks]]
+check_id = "G11-EVAL-MANIFEST"
+gate_id = "G11"
+required = true
+scheduled_phase = 9
+schedule_state = "planned"
+requirement_ids = ["CLI-03", "PRIV-02", "QA-01", "SKL-01", "SKL-02", "SKL-03", "SKL-04", "SKL-05", "SKL-06", "SKL-07"]
+clause_ids = ["validation:G11"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "skill_evaluation", "test_report"]
+
+[[checks]]
+check_id = "G11-DETERMINISTIC-SCORER"
+gate_id = "G11"
+required = true
+scheduled_phase = 9
+schedule_state = "planned"
+requirement_ids = ["CLI-03", "PRIV-02", "QA-01", "SKL-01", "SKL-02", "SKL-03", "SKL-04", "SKL-05", "SKL-06", "SKL-07"]
+clause_ids = ["validation:G11"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "skill_evaluation", "test_report"]
+
+[[checks]]
+check_id = "G11-MODEL-TRIALS"
+gate_id = "G11"
+required = true
+scheduled_phase = 9
+schedule_state = "planned"
+requirement_ids = ["CLI-03", "PRIV-02", "QA-01", "SKL-01", "SKL-02", "SKL-03", "SKL-04", "SKL-05", "SKL-06", "SKL-07"]
+clause_ids = ["validation:G11"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "skill_evaluation", "test_report"]
+
+[[checks]]
+check_id = "G12-FORBIDDEN-CAPABILITIES"
+gate_id = "G12"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ACT-02", "ACT-03", "ADP-03", "ADP-06", "API-02", "CLI-04", "CORE-04", "CORE-08", "EDT-01", "EDT-02", "EDT-03", "PRIV-01", "PRIV-02", "PRIV-03", "PRIV-04", "PRIV-05", "PRIV-06", "QA-01", "QA-06", "REP-03", "REP-04", "SKL-07", "WEB-02"]
+clause_ids = ["validation:G12"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "network_trace", "test_report"]
+
+[[checks]]
+check_id = "G12-PROCESS-SET-DENIAL"
+gate_id = "G12"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ACT-02", "ACT-03", "ADP-03", "ADP-06", "API-02", "CLI-04", "CORE-04", "CORE-08", "EDT-01", "EDT-02", "EDT-03", "PRIV-01", "PRIV-02", "PRIV-03", "PRIV-04", "PRIV-05", "PRIV-06", "QA-01", "QA-06", "REP-03", "REP-04", "SKL-07", "WEB-02"]
+clause_ids = ["validation:G12"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "network_trace", "test_report"]
+
+[[checks]]
+check_id = "G12-CANARY-ZERO-ATTEMPT"
+gate_id = "G12"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ACT-02", "ACT-03", "ADP-03", "ADP-06", "API-02", "CLI-04", "CORE-04", "CORE-08", "EDT-01", "EDT-02", "EDT-03", "PRIV-01", "PRIV-02", "PRIV-03", "PRIV-04", "PRIV-05", "PRIV-06", "QA-01", "QA-06", "REP-03", "REP-04", "SKL-07", "WEB-02"]
+clause_ids = ["validation:G12"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "network_trace", "test_report"]
+
+[[checks]]
+check_id = "G12-NETWORK-PARITY"
+gate_id = "G12"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["ACT-02", "ACT-03", "ADP-03", "ADP-06", "API-02", "CLI-04", "CORE-04", "CORE-08", "EDT-01", "EDT-02", "EDT-03", "PRIV-01", "PRIV-02", "PRIV-03", "PRIV-04", "PRIV-05", "PRIV-06", "QA-01", "QA-06", "REP-03", "REP-04", "SKL-07", "WEB-02"]
+clause_ids = ["validation:G12"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "network_trace", "test_report"]
+
+[[checks]]
+check_id = "G12-SECRET-NONLEAKAGE"
+gate_id = "G12"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ACT-02", "ACT-03", "ADP-03", "ADP-06", "API-02", "CLI-04", "CORE-04", "CORE-08", "EDT-01", "EDT-02", "EDT-03", "PRIV-01", "PRIV-02", "PRIV-03", "PRIV-04", "PRIV-05", "PRIV-06", "QA-01", "QA-06", "REP-03", "REP-04", "SKL-07", "WEB-02"]
+clause_ids = ["validation:G12"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "network_trace", "test_report"]
+
+[[checks]]
+check_id = "G12-PLATFORM-CONTAINMENT"
+gate_id = "G12"
+required = true
+scheduled_phase = 3
+schedule_state = "planned"
+requirement_ids = ["ACT-02", "ACT-03", "ADP-03", "ADP-06", "API-02", "CLI-04", "CORE-04", "CORE-08", "EDT-01", "EDT-02", "EDT-03", "PRIV-01", "PRIV-02", "PRIV-03", "PRIV-04", "PRIV-05", "PRIV-06", "QA-01", "QA-06", "REP-03", "REP-04", "SKL-07", "WEB-02"]
+clause_ids = ["validation:G12"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "network_trace", "test_report"]
+
+[[checks]]
+check_id = "G12-EXTENSION-PROCESS-BOUNDARY"
+gate_id = "G12"
+required = true
+scheduled_phase = 11
+schedule_state = "planned"
+requirement_ids = ["ACT-02", "ACT-03", "ADP-03", "ADP-06", "API-02", "CLI-04", "CORE-04", "CORE-08", "EDT-01", "EDT-02", "EDT-03", "PRIV-01", "PRIV-02", "PRIV-03", "PRIV-04", "PRIV-05", "PRIV-06", "QA-01", "QA-06", "REP-03", "REP-04", "SKL-07", "WEB-02"]
+clause_ids = ["validation:G12"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "network_trace", "test_report"]
+
+[[checks]]
+check_id = "G13-THREAT-MODELS"
+gate_id = "G13"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ACT-01", "ADP-03", "ADP-06", "CLI-03", "CORE-01", "CORE-04", "CORE-06", "FUZ-03", "LEG-01", "LEG-02", "LEG-03", "LEG-04", "LEG-05", "LEG-06", "NASA-09", "NASA-10", "PERF-02", "PKG-01", "PKG-02", "PKG-04", "PRIV-01", "PRIV-02", "PRIV-04", "QA-01", "REL-02", "REP-03", "SKL-06"]
+clause_ids = ["validation:G13"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "manifest", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G13-HOSTILE-REPOSITORY"
+gate_id = "G13"
+required = true
+scheduled_phase = 4
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ADP-03", "ADP-06", "CLI-03", "CORE-01", "CORE-04", "CORE-06", "FUZ-03", "LEG-01", "LEG-02", "LEG-03", "LEG-04", "LEG-05", "LEG-06", "NASA-09", "NASA-10", "PERF-02", "PKG-01", "PKG-02", "PKG-04", "PRIV-01", "PRIV-02", "PRIV-04", "QA-01", "REL-02", "REP-03", "SKL-06"]
+clause_ids = ["validation:G13"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "manifest", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G13-PINNED-SUPPLY-CHAIN"
+gate_id = "G13"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ADP-03", "ADP-06", "CLI-03", "CORE-01", "CORE-04", "CORE-06", "FUZ-03", "LEG-01", "LEG-02", "LEG-03", "LEG-04", "LEG-05", "LEG-06", "NASA-09", "NASA-10", "PERF-02", "PKG-01", "PKG-02", "PKG-04", "PRIV-01", "PRIV-02", "PRIV-04", "QA-01", "REL-02", "REP-03", "SKL-06"]
+clause_ids = ["validation:G13"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "manifest", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G13-LOCAL-VULNERABILITY-DATA"
+gate_id = "G13"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ADP-03", "ADP-06", "CLI-03", "CORE-01", "CORE-04", "CORE-06", "FUZ-03", "LEG-01", "LEG-02", "LEG-03", "LEG-04", "LEG-05", "LEG-06", "NASA-09", "NASA-10", "PERF-02", "PKG-01", "PKG-02", "PKG-04", "PRIV-01", "PRIV-02", "PRIV-04", "QA-01", "REL-02", "REP-03", "SKL-06"]
+clause_ids = ["validation:G13"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "manifest", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G13-LICENSE-SBOM-PROVENANCE"
+gate_id = "G13"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ADP-03", "ADP-06", "CLI-03", "CORE-01", "CORE-04", "CORE-06", "FUZ-03", "LEG-01", "LEG-02", "LEG-03", "LEG-04", "LEG-05", "LEG-06", "NASA-09", "NASA-10", "PERF-02", "PKG-01", "PKG-02", "PKG-04", "PRIV-01", "PRIV-02", "PRIV-04", "QA-01", "REL-02", "REP-03", "SKL-06"]
+clause_ids = ["validation:G13"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "manifest", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G13-RESTRICTED-ARTIFACT-EXCLUSION"
+gate_id = "G13"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ACT-01", "ADP-03", "ADP-06", "CLI-03", "CORE-01", "CORE-04", "CORE-06", "FUZ-03", "LEG-01", "LEG-02", "LEG-03", "LEG-04", "LEG-05", "LEG-06", "NASA-09", "NASA-10", "PERF-02", "PKG-01", "PKG-02", "PKG-04", "PRIV-01", "PRIV-02", "PRIV-04", "QA-01", "REL-02", "REP-03", "SKL-06"]
+clause_ids = ["validation:G13"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "manifest", "provenance", "test_report"]
+
+[[checks]]
+check_id = "G14-EXECUTABLE-DOCS"
+gate_id = "G14"
+required = true
+scheduled_phase = 12
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "ARC-04", "CLI-04", "CORE-07", "CORE-11", "DOC-01", "DOC-02", "DOC-03", "DOC-04", "LEG-04", "NASA-12", "QA-01", "REL-01", "REP-05", "SKL-03", "WEB-01", "WEB-02"]
+clause_ids = ["validation:G14"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["documentation", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G14-CATALOG-DRIFT"
+gate_id = "G14"
+required = true
+scheduled_phase = 12
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "ARC-04", "CLI-04", "CORE-07", "CORE-11", "DOC-01", "DOC-02", "DOC-03", "DOC-04", "LEG-04", "NASA-12", "QA-01", "REL-01", "REP-05", "SKL-03", "WEB-01", "WEB-02"]
+clause_ids = ["validation:G14"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["documentation", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G14-OFFLINE-LINKS"
+gate_id = "G14"
+required = true
+scheduled_phase = 12
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "ARC-04", "CLI-04", "CORE-07", "CORE-11", "DOC-01", "DOC-02", "DOC-03", "DOC-04", "LEG-04", "NASA-12", "QA-01", "REL-01", "REP-05", "SKL-03", "WEB-01", "WEB-02"]
+clause_ids = ["validation:G14"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["documentation", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G14-PUBLIC-CLAIM-MAPPING"
+gate_id = "G14"
+required = true
+scheduled_phase = 12
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "ARC-04", "CLI-04", "CORE-07", "CORE-11", "DOC-01", "DOC-02", "DOC-03", "DOC-04", "LEG-04", "NASA-12", "QA-01", "REL-01", "REP-05", "SKL-03", "WEB-01", "WEB-02"]
+clause_ids = ["validation:G14"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["documentation", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G14-FORBIDDEN-CLAIMS"
+gate_id = "G14"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ADP-04", "ARC-04", "CLI-04", "CORE-07", "CORE-11", "DOC-01", "DOC-02", "DOC-03", "DOC-04", "LEG-04", "NASA-12", "QA-01", "REL-01", "REP-05", "SKL-03", "WEB-01", "WEB-02"]
+clause_ids = ["validation:G14"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["documentation", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G15-ISOLATED-BUILDS"
+gate_id = "G15"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "ARC-01", "ARC-03", "CLI-01", "CLI-03", "DED-03", "DOC-01", "DOC-03", "EDT-01", "EDT-02", "LEG-02", "LEG-04", "PKG-01", "PKG-02", "PKG-03", "PKG-04", "QA-01", "REL-02", "REL-03", "SKL-01", "SKL-03", "SKL-06", "WEB-01"]
+clause_ids = ["validation:G15"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "build_artifact", "gate_evidence", "package_install"]
+
+[[checks]]
+check_id = "G15-ARTIFACT-CONTENTS"
+gate_id = "G15"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "ARC-01", "ARC-03", "CLI-01", "CLI-03", "DED-03", "DOC-01", "DOC-03", "EDT-01", "EDT-02", "LEG-02", "LEG-04", "PKG-01", "PKG-02", "PKG-03", "PKG-04", "QA-01", "REL-02", "REL-03", "SKL-01", "SKL-03", "SKL-06", "WEB-01"]
+clause_ids = ["validation:G15"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "build_artifact", "gate_evidence", "package_install"]
+
+[[checks]]
+check_id = "G15-INSTALL-EXTRAS-ENTRYPOINTS"
+gate_id = "G15"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "ARC-01", "ARC-03", "CLI-01", "CLI-03", "DED-03", "DOC-01", "DOC-03", "EDT-01", "EDT-02", "LEG-02", "LEG-04", "PKG-01", "PKG-02", "PKG-03", "PKG-04", "QA-01", "REL-02", "REL-03", "SKL-01", "SKL-03", "SKL-06", "WEB-01"]
+clause_ids = ["validation:G15"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "build_artifact", "gate_evidence", "package_install"]
+
+[[checks]]
+check_id = "G15-UNINSTALL"
+gate_id = "G15"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "ARC-01", "ARC-03", "CLI-01", "CLI-03", "DED-03", "DOC-01", "DOC-03", "EDT-01", "EDT-02", "LEG-02", "LEG-04", "PKG-01", "PKG-02", "PKG-03", "PKG-04", "QA-01", "REL-02", "REL-03", "SKL-01", "SKL-03", "SKL-06", "WEB-01"]
+clause_ids = ["validation:G15"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "build_artifact", "gate_evidence", "package_install"]
+
+[[checks]]
+check_id = "G15-REPRODUCIBILITY-IDENTITY"
+gate_id = "G15"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ADP-04", "ARC-01", "ARC-03", "CLI-01", "CLI-03", "DED-03", "DOC-01", "DOC-03", "EDT-01", "EDT-02", "LEG-02", "LEG-04", "PKG-01", "PKG-02", "PKG-03", "PKG-04", "QA-01", "REL-02", "REL-03", "SKL-01", "SKL-03", "SKL-06", "WEB-01"]
+clause_ids = ["validation:G15"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "build_artifact", "gate_evidence", "package_install"]
+
+[[checks]]
+check_id = "G16-LSP-PROTOCOL"
+gate_id = "G16"
+required = true
+scheduled_phase = 11
+schedule_state = "planned"
+requirement_ids = ["EDT-01", "EDT-02", "EDT-03", "LSP-01", "LSP-02", "LSP-03", "PERF-03", "QA-01"]
+clause_ids = ["validation:G16"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["build_artifact", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G16-LSP-RACES-LIFECYCLE"
+gate_id = "G16"
+required = true
+scheduled_phase = 11
+schedule_state = "planned"
+requirement_ids = ["EDT-01", "EDT-02", "EDT-03", "LSP-01", "LSP-02", "LSP-03", "PERF-03", "QA-01"]
+clause_ids = ["validation:G16"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["build_artifact", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G16-LSP-POSITIONS-FRAMING"
+gate_id = "G16"
+required = true
+scheduled_phase = 11
+schedule_state = "planned"
+requirement_ids = ["EDT-01", "EDT-02", "EDT-03", "LSP-01", "LSP-02", "LSP-03", "PERF-03", "QA-01"]
+clause_ids = ["validation:G16"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["build_artifact", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G16-EDITOR-PACKAGES-HANDSHAKE"
+gate_id = "G16"
+required = true
+scheduled_phase = 11
+schedule_state = "planned"
+requirement_ids = ["EDT-01", "EDT-02", "EDT-03", "LSP-01", "LSP-02", "LSP-03", "PERF-03", "QA-01"]
+clause_ids = ["validation:G16"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["build_artifact", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G16-EDITOR-PRIVACY-TRUST"
+gate_id = "G16"
+required = true
+scheduled_phase = 11
+schedule_state = "planned"
+requirement_ids = ["EDT-01", "EDT-02", "EDT-03", "LSP-01", "LSP-02", "LSP-03", "PERF-03", "QA-01"]
+clause_ids = ["validation:G16"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["build_artifact", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G17-ACTION-CONTRACT"
+gate_id = "G17"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-02", "ACT-03", "ADP-06", "PRIV-05", "QA-01"]
+clause_ids = ["validation:G17"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G17-FORK-PRIVILEGE-SAFETY"
+gate_id = "G17"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-02", "ACT-03", "ADP-06", "PRIV-05", "QA-01"]
+clause_ids = ["validation:G17"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G17-TIMEOUT-CANCELLATION"
+gate_id = "G17"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-02", "ACT-03", "ADP-06", "PRIV-05", "QA-01"]
+clause_ids = ["validation:G17"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G17-IMMUTABLE-PINS"
+gate_id = "G17"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-02", "ACT-03", "ADP-06", "PRIV-05", "QA-01"]
+clause_ids = ["validation:G17"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G17-HOSTED-OUTPUT-DENIAL"
+gate_id = "G17"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-02", "ACT-03", "ADP-06", "PRIV-05", "QA-01"]
+clause_ids = ["validation:G17"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G17-NO-TOKEN-NORMAL-SCAN"
+gate_id = "G17"
+required = true
+scheduled_phase = 13
+schedule_state = "planned"
+requirement_ids = ["ACT-01", "ACT-02", "ACT-03", "ADP-06", "PRIV-05", "QA-01"]
+clause_ids = ["validation:G17"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G18-BENCHMARK-POLICY"
+gate_id = "G18"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["DED-02", "LSP-03", "NASA-04", "PERF-01", "PERF-02", "PERF-03", "QA-01", "QA-06"]
+clause_ids = ["validation:G18"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G18-NATIVE-SCAN-BUDGETS"
+gate_id = "G18"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["DED-02", "LSP-03", "NASA-04", "PERF-01", "PERF-02", "PERF-03", "QA-01", "QA-06"]
+clause_ids = ["validation:G18"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G18-ANALYZER-RESOURCE-BOUNDS"
+gate_id = "G18"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["DED-02", "LSP-03", "NASA-04", "PERF-01", "PERF-02", "PERF-03", "QA-01", "QA-06"]
+clause_ids = ["validation:G18"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G18-LSP-BUDGETS"
+gate_id = "G18"
+required = true
+scheduled_phase = 11
+schedule_state = "planned"
+requirement_ids = ["DED-02", "LSP-03", "NASA-04", "PERF-01", "PERF-02", "PERF-03", "QA-01", "QA-06"]
+clause_ids = ["validation:G18"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G18-REPEATED-RUN-PLATEAU"
+gate_id = "G18"
+required = true
+scheduled_phase = 10
+schedule_state = "planned"
+requirement_ids = ["DED-02", "LSP-03", "NASA-04", "PERF-01", "PERF-02", "PERF-03", "QA-01", "QA-06"]
+clause_ids = ["validation:G18"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["benchmark", "gate_evidence", "test_report"]
+
+[[checks]]
+check_id = "G19-INDEPENDENT-ROLE-COVERAGE"
+gate_id = "G19"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ADP-06", "ARC-02", "DOC-04", "LEG-01", "LEG-03", "LEG-05", "LEG-06", "NASA-12", "PERF-01", "PRIV-01", "QA-01", "QA-02", "QA-05", "QA-06", "REL-04", "SKL-07"]
+clause_ids = ["validation:G19"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "review_findings"]
+
+[[checks]]
+check_id = "G19-ZERO-CRITICAL-HIGH"
+gate_id = "G19"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ADP-06", "ARC-02", "DOC-04", "LEG-01", "LEG-03", "LEG-05", "LEG-06", "NASA-12", "PERF-01", "PRIV-01", "QA-01", "QA-02", "QA-05", "QA-06", "REL-04", "SKL-07"]
+clause_ids = ["validation:G19"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "review_findings"]
+
+[[checks]]
+check_id = "G19-MEDIUM-EXCEPTIONS"
+gate_id = "G19"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ADP-06", "ARC-02", "DOC-04", "LEG-01", "LEG-03", "LEG-05", "LEG-06", "NASA-12", "PERF-01", "PRIV-01", "QA-01", "QA-02", "QA-05", "QA-06", "REL-04", "SKL-07"]
+clause_ids = ["validation:G19"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "review_findings"]
+
+[[checks]]
+check_id = "G19-CANDIDATE-INVALIDATION"
+gate_id = "G19"
+required = true
+scheduled_phase = 1
+schedule_state = "scheduled"
+requirement_ids = ["ADP-06", "ARC-02", "DOC-04", "LEG-01", "LEG-03", "LEG-05", "LEG-06", "NASA-12", "PERF-01", "PRIV-01", "QA-01", "QA-02", "QA-05", "QA-06", "REL-04", "SKL-07"]
+clause_ids = ["validation:G19"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["gate_evidence", "review_findings"]
+
+[[checks]]
+check_id = "G20-EVIDENCE-COMPLETENESS"
+gate_id = "G20"
+required = true
+scheduled_phase = 14
+schedule_state = "planned"
+requirement_ids = ["DOC-04", "PKG-04", "PRIV-04", "PUB-01", "PUB-02", "PUB-03", "QA-01", "QA-02", "REL-02", "REL-03", "REL-04"]
+clause_ids = ["validation:G20"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "attestation", "gate_evidence"]
+
+[[checks]]
+check_id = "G20-CANDIDATE-ARTIFACT-IDENTITY"
+gate_id = "G20"
+required = true
+scheduled_phase = 14
+schedule_state = "planned"
+requirement_ids = ["DOC-04", "PKG-04", "PRIV-04", "PUB-01", "PUB-02", "PUB-03", "QA-01", "QA-02", "REL-02", "REL-03", "REL-04"]
+clause_ids = ["validation:G20"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "attestation", "gate_evidence"]
+
+[[checks]]
+check_id = "G20-AUTHORIZED-DESTINATIONS"
+gate_id = "G20"
+required = true
+scheduled_phase = 14
+schedule_state = "planned"
+requirement_ids = ["DOC-04", "PKG-04", "PRIV-04", "PUB-01", "PUB-02", "PUB-03", "QA-01", "QA-02", "REL-02", "REL-03", "REL-04"]
+clause_ids = ["validation:G20"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "attestation", "gate_evidence"]
+
+[[checks]]
+check_id = "G20-REMOTE-TREE-PARITY"
+gate_id = "G20"
+required = true
+scheduled_phase = 14
+schedule_state = "planned"
+requirement_ids = ["DOC-04", "PKG-04", "PRIV-04", "PUB-01", "PUB-02", "PUB-03", "QA-01", "QA-02", "REL-02", "REL-03", "REL-04"]
+clause_ids = ["validation:G20"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "attestation", "gate_evidence"]
+
+[[checks]]
+check_id = "G20-POST-PUBLISH-SMOKE"
+gate_id = "G20"
+required = true
+scheduled_phase = 14
+schedule_state = "planned"
+requirement_ids = ["DOC-04", "PKG-04", "PRIV-04", "PUB-01", "PUB-02", "PUB-03", "QA-01", "QA-02", "REL-02", "REL-03", "REL-04"]
+clause_ids = ["validation:G20"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "attestation", "gate_evidence"]
+
+[[checks]]
+check_id = "G20-FINAL-CLAIM-AUTHORITY"
+gate_id = "G20"
+required = true
+scheduled_phase = 14
+schedule_state = "planned"
+requirement_ids = ["DOC-04", "PKG-04", "PRIV-04", "PUB-01", "PUB-02", "PUB-03", "QA-01", "QA-02", "REL-02", "REL-03", "REL-04"]
+clause_ids = ["validation:G20"]
+truth_criteria = ["candidate_identity_matches", "child_outcome_success", "expected_artifacts_present_and_hashed", "process_exit_zero", "required_tools_verified", "source_clause_digest_matches", "structured_child_result_valid", "zero_unexpected_counts"]
+expected_artifact_classes = ["artifact_identity", "attestation", "gate_evidence"]

@@ -1,0 +1,171 @@
+schema_version = "gate-clause-oracle/v1"
+normalization = "markdown-section-v1"
+hash_domain = "python-doctor/clause/v1"
+
+[[clauses]]
+clause_id = "validation:G00"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G00 — Repository integrity and legal provenance"
+sha256 = "9c67b6fd5a5c15bf0bfd1fb5316ec8e3f9bbdfca6ae22bcb332a58ea664194ac"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ARC-04", "DOC-01", "LEG-01", "LEG-02", "LEG-03", "LEG-05", "LEG-06", "PRIV-01", "QA-01", "QA-02", "REL-01", "REL-03", "SKL-01"]
+
+[[clauses]]
+clause_id = "validation:G01"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G01 — Compile, format, lint, and type"
+sha256 = "4913b4f96bad0c59e06a9cbc22c474fac5b4a1fbd339d15346cba8f3101e52b5"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ARC-03", "CORE-03", "QA-01"]
+
+[[clauses]]
+clause_id = "validation:G02"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G02 — Tests, coverage, and collection"
+sha256 = "17d72ca857354490297fde1e1aa379c9df66d05273a80c7bff9377b6bda6b01a"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ADP-02", "API-03", "CORE-01", "CORE-05", "QA-01", "QA-02", "QA-03"]
+
+[[clauses]]
+clause_id = "validation:G03"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G03 — Architecture and independent installation"
+sha256 = "59b45621295ae350bc224df81930215089930d015d92c5d98f6d805a378bc5d3"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ADP-01", "ADP-04", "ADP-05", "API-01", "ARC-01", "ARC-02", "ARC-04", "DED-03", "EDT-03", "LSP-01", "PRIV-02", "QA-01"]
+
+[[clauses]]
+clause_id = "validation:G04"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G04 — API, schema, and CLI compatibility"
+sha256 = "ebf83f8973d954c26def974b4fb5381d1e49798366e4d6f4fd050a3d76dc320b"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ACT-01", "ACT-03", "ADP-01", "ADP-02", "ADP-05", "API-01", "API-03", "CLI-01", "CLI-02", "CLI-04", "CORE-02", "CORE-04", "CORE-05", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "LSP-01", "NASA-01", "NASA-11", "NASA-12", "QA-01", "REL-01", "REP-01", "REP-02", "REP-05"]
+
+[[clauses]]
+clause_id = "validation:G05"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G05 — Python and operating-system matrix"
+sha256 = "c05eb61bb971eec7c9038b868196d270264b680fefed6dcb322a7e3c327a49b7"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["API-01", "ARC-03", "CLI-01", "CORE-01", "CORE-03", "NASA-06", "PKG-03", "QA-01"]
+
+[[clauses]]
+clause_id = "validation:G06"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G06 — Native rule conformance"
+sha256 = "5ab5b017075904125c824faa26fc760626378914d57789231cb9d29958f691d0"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ADP-04", "CORE-07", "DED-01", "DED-02", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-04", "SKL-04", "SKL-05"]
+
+[[clauses]]
+clause_id = "validation:G07"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G07 — Property, fuzz, and regression corpus"
+sha256 = "6ea6bc034f0db3568fbde43132564ec09abbd43a4698c339b395607b7474b554"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ADP-03", "CORE-02", "CORE-03", "CORE-04", "CORE-05", "CORE-06", "CORE-07", "CORE-08", "CORE-09", "CORE-10", "DED-01", "DED-02", "FUZ-01", "FUZ-02", "FUZ-03", "LSP-02", "LSP-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "PRIV-04", "QA-01", "QA-04", "REP-01", "REP-03"]
+
+[[clauses]]
+clause_id = "validation:G08"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G08 — Mutation strength"
+sha256 = "bf805d5006b251606ddb28b2d5d84cc916c08588135be5e907cb30e958ccd68b"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["CLI-02", "CORE-05", "CORE-10", "FUZ-02", "LSP-03", "NASA-01", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "NASA-12", "QA-01", "QA-03"]
+
+[[clauses]]
+clause_id = "validation:G09"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G09 — End-to-end product workflows"
+sha256 = "cdd995651f765c39a8c4336529d31a535aa17e69bf720f58d5b84248c24ddb93"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ADP-01", "ADP-02", "ADP-05", "API-02", "API-03", "ARC-01", "CLI-01", "CLI-02", "CLI-03", "CORE-01", "CORE-02", "CORE-04", "CORE-06", "CORE-08", "CORE-09", "CORE-10", "CORE-11", "DED-03", "NASA-11", "PKG-03", "PRIV-03", "QA-01", "QA-06", "REP-01", "REP-02", "REP-04", "REP-05"]
+
+[[clauses]]
+clause_id = "validation:G10"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G10 — OSS corpus quality and noise"
+sha256 = "6d695d8bef49715efacf01563240f746ac338b12115baa91b7dd50d3f646e0ff"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ADP-05", "CORE-07", "DED-01", "DED-02", "FUZ-03", "NASA-02", "NASA-03", "NASA-04", "NASA-05", "NASA-06", "NASA-07", "NASA-08", "NASA-09", "NASA-10", "NASA-11", "QA-01", "QA-04", "QA-06", "SKL-04", "SKL-05"]
+
+[[clauses]]
+clause_id = "validation:G11"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G11 — Skill contracts and pressure evaluation"
+sha256 = "30911958cf1b5a0ee6899e1a0e300850f1c860290d1ea94f7e2ba0d54a949693"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["CLI-03", "PRIV-02", "QA-01", "SKL-01", "SKL-02", "SKL-03", "SKL-04", "SKL-05", "SKL-06", "SKL-07"]
+
+[[clauses]]
+clause_id = "validation:G12"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G12 — Privacy and network denial"
+sha256 = "c8541df00818246dcdaa0c914685635ffcb886851aec743b9f5d92f1a286e5c4"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ACT-02", "ACT-03", "ADP-03", "ADP-06", "API-02", "CLI-04", "CORE-04", "CORE-08", "EDT-01", "EDT-02", "EDT-03", "PRIV-01", "PRIV-02", "PRIV-03", "PRIV-04", "PRIV-05", "PRIV-06", "QA-01", "QA-06", "REP-03", "REP-04", "SKL-07", "WEB-02"]
+
+[[clauses]]
+clause_id = "validation:G13"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G13 — Security, supply chain, licenses, and provenance"
+sha256 = "34ce170a69ca2eafeac69014ff724ac47115102f6b14ba12b41acd95246b1d84"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ACT-01", "ADP-03", "ADP-06", "CLI-03", "CORE-01", "CORE-04", "CORE-06", "FUZ-03", "LEG-01", "LEG-02", "LEG-03", "LEG-04", "LEG-05", "LEG-06", "NASA-09", "NASA-10", "PERF-02", "PKG-01", "PKG-02", "PKG-04", "PRIV-01", "PRIV-02", "PRIV-04", "QA-01", "REL-02", "REP-03", "SKL-06"]
+
+[[clauses]]
+clause_id = "validation:G14"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G14 — Documentation truth"
+sha256 = "9ad72c4198e5691305bc483756b168f7de7496f05774ae86fac04b1fbef111e0"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ADP-04", "ARC-04", "CLI-04", "CORE-07", "CORE-11", "DOC-01", "DOC-02", "DOC-03", "DOC-04", "LEG-04", "NASA-12", "QA-01", "REL-01", "REP-05", "SKL-03", "WEB-01", "WEB-02"]
+
+[[clauses]]
+clause_id = "validation:G15"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G15 — Wheel and sdist"
+sha256 = "237ec6b685b61fecfff9b8458180db7cdfce08a2407a87bd6614f1b136d9095f"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ADP-04", "ARC-01", "ARC-03", "CLI-01", "CLI-03", "DED-03", "DOC-01", "DOC-03", "EDT-01", "EDT-02", "LEG-02", "LEG-04", "PKG-01", "PKG-02", "PKG-03", "PKG-04", "QA-01", "REL-02", "REL-03", "SKL-01", "SKL-03", "SKL-06", "WEB-01"]
+
+[[clauses]]
+clause_id = "validation:G16"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G16 — LSP and editors"
+sha256 = "9c7f99e75942d90e2d43956319daf8110ba10ba7a4f9c546c54b0ba11944e9cb"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["EDT-01", "EDT-02", "EDT-03", "LSP-01", "LSP-02", "LSP-03", "PERF-03", "QA-01"]
+
+[[clauses]]
+clause_id = "validation:G17"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G17 — GitHub Action"
+sha256 = "20e6669ed14d613ed2c7a07183ce3431d719fa0ea499268b660182432d79f8c4"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ACT-01", "ACT-02", "ACT-03", "ADP-06", "PRIV-05", "QA-01"]
+
+[[clauses]]
+clause_id = "validation:G18"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G18 — Performance and resource bounds"
+sha256 = "f57ca73cee789af93bc6273e13a21777e55bb2b12c7f759e123737fd7ec09d0a"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["DED-02", "LSP-03", "NASA-04", "PERF-01", "PERF-02", "PERF-03", "QA-01", "QA-06"]
+
+[[clauses]]
+clause_id = "validation:G19"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G19 — Independent adversarial stages"
+sha256 = "6af0c55cba3b8db6fc55e44f16e512c4b37c8b9767057fba8b6102d28e44f403"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["ADP-06", "ARC-02", "DOC-04", "LEG-01", "LEG-03", "LEG-05", "LEG-06", "NASA-12", "PERF-01", "PRIV-01", "QA-01", "QA-02", "QA-05", "QA-06", "REL-04", "SKL-07"]
+
+[[clauses]]
+clause_id = "validation:G20"
+path = "docs/superpowers/specs/2026-07-14-python-doctor-validation-gates.md"
+section = "G20 — Release evidence and publication parity"
+sha256 = "850dcc89364cdf72f518aafb49cfa6a81b6e6bb99caa39287eccea5ac191be81"
+assertion_kind = "normative_gate_section"
+requirement_ids = ["DOC-04", "PKG-04", "PRIV-04", "PUB-01", "PUB-02", "PUB-03", "QA-01", "QA-02", "REL-02", "REL-03", "REL-04"]
