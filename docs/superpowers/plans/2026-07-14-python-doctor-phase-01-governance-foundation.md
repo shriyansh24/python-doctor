@@ -1223,7 +1223,7 @@ test -n "${GOVERNANCE_BASE_SHA:-}"
 test -n "${CONTRACT_INTRODUCTION_SHA:-}"
 test -n "${CONTRACT_INTRODUCTION_TREE:-}"
 test -n "${CONTRACT_INTRODUCTION_BLOB:-}"
-env -i PATH="$PATH" LC_ALL=C.UTF-8 python -I -B -X utf8 - \
+env -i PATH="$PATH" LC_ALL=C.UTF-8 python -I -B -X utf8 -S - \
   "$PHASE_01_EXTERNAL_EVIDENCE_PARENT" \
   "$PHASE_01_EXTERNAL_EVIDENCE_ROOT" \
   "$PHASE_01_TASK_DISPATCH_ROOT" \
@@ -1762,9 +1762,10 @@ result only when `testsRun` equals that count, `wasSuccessful()` is true, and
 `skipped`, `expectedFailures`, and `unexpectedSuccesses` are all empty. Each
 mandatory single-test suite must additionally have a pre-run count of one.
 
-Every workflow and local-gate Python process starts as
-`python -I -B -X utf8`; neither command nor workflow environment sets
-`PYTHONPATH`. The inline supervisor imports trusted standard-library modules
+Every trusted Task 0 Python process—checkpoint acceptance, workflow supervisor,
+local supervisor, every supervised child, and `compileall`—starts with the
+complete `python -I -B -X utf8 -S` isolation set; neither command nor workflow
+environment sets `PYTHONPATH`. The inline supervisor imports trusted standard-library modules
 only and never imports or executes repository code in its process. It validates
 the checkout, `src`, `tests`, `scripts`, `scripts/governance`, and
 `src/python_doctor` component by component: every resolved path is root-
@@ -1785,7 +1786,18 @@ package search locations against the predeclared resolved file before and after
 load. An allowlisted-prefix miss or redirected `__path__` raises immediately and
 never falls through to a later meta finder, path hook, or `sys.path` lookup.
 Repository paths never enter `sys.path`; all child import machinery and path
-state must equal the captured closed state after the stage.
+state must equal the captured closed state after the stage. Before repository
+import, the child clears `sys.path_importer_cache`, repopulates it once for the
+closed trusted path, and captures each exact key, finder type,
+origin path/archive, and loader table. Post-stage validation repopulates and
+requires every baseline key with the same validated fingerprint. Additional
+package-cache keys are allowed only when root-contained by a trusted
+stdlib/zip/dynamic-loader path and backed by a validated FileFinder/zip loader;
+equivalent trusted finder reconstitution is allowed, but an unknown finder is not.
+Baseline non-project modules must
+retain their object/spec/loader/origin identity; every later non-project module
+must have a built-in, frozen, or validated stdlib/zip/dynamic-loader origin and
+corresponding trusted loader.
 
 The workflow supervisor launches separate native-test, simulated-test,
 full-module, and validator children; the local supervisor omits the native child
@@ -1800,15 +1812,24 @@ Exit zero, hard `os._exit(0)`, another code, missing/duplicate evidence,
 exception, skip, expected failure, unexpected success, wrong `testsRun`,
 validator nonzero/non-integer, or before/after mutation is a parent failure.
 
-Tests parse every shell line in the exact workflow and fail if any Python
-invocation lacks all four tokens `python -I -B -X utf8`, if `PYTHONPATH` occurs
-anywhere in the workflow, if an unapproved project import is added to the
+Tests parse the Task 0 acceptance block, exact workflow, exact local supervisor,
+supervisor child argv, and compileall line. They fail if any trusted Python
+invocation lacks `python -I -B -X utf8 -S`, if `PYTHONPATH` occurs anywhere in
+either supervisor, if an unapproved project import is added to the
 finder, if any repository path is added to `sys.path`, or if a repository path
 precedes the trusted startup paths. Hostile regressions cover symlink/reparse
 components and files; redirected package `__path__`; an allowlisted module miss;
 a later meta finder, path hook, or repository `sys.path` entry; persistent source
 mutation; hard exit zero; validator exception/`SystemExit`; a suite that runs
 fewer tests than collected; and `expectedFailure`/unexpected-success cases.
+The import-cache regression persists a cache finder for a trusted key and uses
+it to attempt loading a non-prefix repository payload; both the payload origin
+check and the post-stage cache object/fingerprint comparison must fail.
+Separate cases reject a new `None` negative-cache entry and a
+purelib/platlib/user-site or `site-packages`/`dist-packages` finder and payload,
+even when that install root is a descendant of stdlib. A positive portable
+case freezes nested zip-package keys by requiring the cache key to equal the
+trusted archive joined to the zipimporter's normalized prefix.
 Snapshot regressions additionally require a traversal/scandir error, excessive
 entry count, excessive depth, and persistent mutation of each non-Python
 `.txt`/`.toml` oracle class to fail closed; every regular watched file is
@@ -2060,10 +2081,12 @@ jobs:
           import json
           import os
           import pathlib
+          import site
           import stat
           import sys
           import sysconfig
           import unittest
+          import zipimport
 
           MAX_SOURCE_BYTES = 4 * 1024 * 1024
 
@@ -2120,6 +2143,30 @@ jobs:
           stdlib = pathlib.Path(sysconfig.get_path("stdlib")).resolve(strict=True)
           platstdlib = pathlib.Path(sysconfig.get_path("platstdlib")).resolve(strict=True)
           base = pathlib.Path(sys.base_prefix).resolve(strict=True)
+          package_install_roots = set()
+          for scheme_key in ("purelib", "platlib"):
+              scheme_path = sysconfig.get_path(scheme_key)
+              if scheme_path:
+                  candidate = pathlib.Path(scheme_path).resolve(strict=False)
+                  if candidate not in (stdlib, platstdlib):
+                      package_install_roots.add(candidate)
+          user_sites = site.getusersitepackages()
+          if not user_sites:
+              user_sites = ()
+          elif isinstance(user_sites, str):
+              user_sites = (user_sites,)
+          for user_site in user_sites:
+              package_install_roots.add(pathlib.Path(user_site).resolve(strict=False))
+
+          def under_package_install_root(candidate):
+              lowered_parts = {part.lower() for part in candidate.parts}
+              if "site-packages" in lowered_parts or "dist-packages" in lowered_parts:
+                  return True
+              return any(
+                  candidate == package_root or package_root in candidate.parents
+                  for package_root in package_install_roots
+              )
+
           sanitized = []
           for item in tuple(sys.path):
               if not item:
@@ -2128,13 +2175,50 @@ jobs:
               allowed = candidate in (stdlib, platstdlib)
               allowed = allowed or candidate.name in ("lib-dynload", "DLLs") and base in candidate.parents
               allowed = allowed or candidate.suffix == ".zip" and base in candidate.parents
-              if allowed:
+              if allowed and not under_package_install_root(candidate):
                   sanitized.append(str(candidate))
           if not sanitized:
               abort()
           sys.path[:] = sanitized
           closed_path = tuple(sys.path)
           closed_hooks = tuple(sys.path_hooks)
+          sys.path_importer_cache.clear()
+          cache_probe = "_python_doctor_closed_cache_probe_"
+          for item in closed_path:
+              importlib.machinery.PathFinder.find_spec(cache_probe, [item])
+
+          def importer_fingerprint(key, importer):
+              if importer is None:
+                  return ("none",)
+              if type(importer) is importlib.machinery.FileFinder:
+                  if pathlib.Path(importer.path).resolve(strict=False) != pathlib.Path(key).resolve(strict=False):
+                      abort()
+                  allowed_factories = (
+                      importlib.machinery.SourceFileLoader,
+                      importlib.machinery.SourcelessFileLoader,
+                      importlib.machinery.ExtensionFileLoader,
+                  )
+                  if any(
+                      not isinstance(factory, type) or not issubclass(factory, allowed_factories)
+                      for _suffix, factory in importer._loaders
+                  ):
+                      abort()
+                  return ("file", importer.path, tuple(importer._loaders))
+              if type(importer) is zipimport.zipimporter:
+                  archive = pathlib.Path(importer.archive).resolve(strict=False)
+                  prefix = importer.prefix.replace("/", os.sep).replace("\\", os.sep).strip(os.sep)
+                  expected_key = archive if not prefix else pathlib.Path(str(archive) + os.sep + prefix)
+                  if pathlib.Path(key).resolve(strict=False) != expected_key.resolve(strict=False):
+                      abort()
+                  return ("zip", str(archive), prefix)
+              abort()
+
+          if set(sys.path_importer_cache) != set(closed_path):
+              abort()
+          closed_importer_cache = {
+              key: importer_fingerprint(key, importer)
+              for key, importer in sys.path_importer_cache.items()
+          }
 
           class ExactLoader(importlib.machinery.SourceFileLoader):
               def __init__(self, fullname, path, digest):
@@ -2179,12 +2263,97 @@ jobs:
           finder = ClosedFinder()
           sys.meta_path.insert(0, finder)
           closed_meta = tuple(sys.meta_path)
+          trusted_roots = tuple(
+              pathlib.Path(item).resolve(strict=False)
+              for item in closed_path
+              if pathlib.Path(item).suffix != ".zip"
+          )
+          trusted_archives = tuple(
+              os.path.normcase(str(pathlib.Path(item).resolve(strict=False)))
+              for item in closed_path
+              if pathlib.Path(item).suffix == ".zip"
+          )
+
+          def trusted_origin(origin):
+              if origin in ("built-in", "frozen"):
+                  return True
+              if not isinstance(origin, str):
+                  return False
+              normalized = os.path.normcase(origin)
+              if any(
+                  normalized == archive or normalized.startswith(archive + os.sep)
+                  for archive in trusted_archives
+              ):
+                  return True
+              try:
+                  resolved = pathlib.Path(origin).resolve(strict=True)
+              except (OSError, RuntimeError):
+                  return False
+              if under_package_install_root(resolved):
+                  return False
+              return any(resolved == base_path or base_path in resolved.parents for base_path in trusted_roots)
+
+          def validate_trusted_module(module):
+              spec = getattr(module, "__spec__", None)
+              loader = getattr(module, "__loader__", None)
+              if spec is None or spec.loader is not loader or not trusted_origin(spec.origin):
+                  abort()
+              if loader in (importlib.machinery.BuiltinImporter, importlib.machinery.FrozenImporter):
+                  return
+              allowed_loaders = (
+                  importlib.machinery.SourceFileLoader,
+                  importlib.machinery.SourcelessFileLoader,
+                  importlib.machinery.ExtensionFileLoader,
+                  zipimport.zipimporter,
+              )
+              if not isinstance(loader, allowed_loaders):
+                  abort()
+              loader_path = getattr(loader, "path", getattr(loader, "archive", spec.origin))
+              if not trusted_origin(loader_path):
+                  abort()
+
+          baseline_modules = {}
+          for name, module in tuple(sys.modules.items()):
+              if name.partition(".")[0] in finder.prefixes:
+                  abort()
+              spec = getattr(module, "__spec__", None)
+              if spec is not None:
+                  validate_trusted_module(module)
+              baseline_modules[name] = (
+                  module,
+                  spec,
+                  getattr(module, "__loader__", None),
+                  getattr(module, "__file__", None),
+              )
 
           def verify_import_state():
               if tuple(sys.path) != closed_path or tuple(sys.path_hooks) != closed_hooks or tuple(sys.meta_path) != closed_meta:
                   abort()
+              for item in closed_path:
+                  importlib.machinery.PathFinder.find_spec(cache_probe, [item])
+              if not set(closed_importer_cache).issubset(sys.path_importer_cache):
+                  abort()
+              for key, observed_importer in sys.path_importer_cache.items():
+                  observed_fingerprint = importer_fingerprint(key, observed_importer)
+                  if key in closed_importer_cache:
+                      if observed_fingerprint != closed_importer_cache[key]:
+                          abort()
+                  elif observed_fingerprint == ("none",) or not trusted_origin(key):
+                      abort()
               for name, module in tuple(sys.modules.items()):
                   if name.partition(".")[0] not in finder.prefixes:
+                      if name in baseline_modules:
+                          expected = baseline_modules[name]
+                          observed = (
+                              module,
+                              getattr(module, "__spec__", None),
+                              getattr(module, "__loader__", None),
+                              getattr(module, "__file__", None),
+                          )
+                          if observed != expected:
+                              abort()
+                      else:
+                          validate_trusted_module(module)
                       continue
                   if name not in modules:
                       abort()
@@ -2295,7 +2464,7 @@ jobs:
 Run the local zero-skip gate and commit these exact files before Task 1.
 
 ```bash
-python -I -B -X utf8 - "$PWD" <<'PY'
+python -I -B -X utf8 -S - "$PWD" <<'PY'
 import ast
 import hashlib
 import json
@@ -2480,10 +2649,12 @@ import importlib.util
 import json
 import os
 import pathlib
+import site
 import stat
 import sys
 import sysconfig
 import unittest
+import zipimport
 
 MAX_SOURCE_BYTES = 4 * 1024 * 1024
 
@@ -2540,6 +2711,30 @@ modules = json.loads(sys.argv[5])
 stdlib = pathlib.Path(sysconfig.get_path("stdlib")).resolve(strict=True)
 platstdlib = pathlib.Path(sysconfig.get_path("platstdlib")).resolve(strict=True)
 base = pathlib.Path(sys.base_prefix).resolve(strict=True)
+package_install_roots = set()
+for scheme_key in ("purelib", "platlib"):
+    scheme_path = sysconfig.get_path(scheme_key)
+    if scheme_path:
+        candidate = pathlib.Path(scheme_path).resolve(strict=False)
+        if candidate not in (stdlib, platstdlib):
+            package_install_roots.add(candidate)
+user_sites = site.getusersitepackages()
+if not user_sites:
+    user_sites = ()
+elif isinstance(user_sites, str):
+    user_sites = (user_sites,)
+for user_site in user_sites:
+    package_install_roots.add(pathlib.Path(user_site).resolve(strict=False))
+
+def under_package_install_root(candidate):
+    lowered_parts = {part.lower() for part in candidate.parts}
+    if "site-packages" in lowered_parts or "dist-packages" in lowered_parts:
+        return True
+    return any(
+        candidate == package_root or package_root in candidate.parents
+        for package_root in package_install_roots
+    )
+
 sanitized = []
 for item in tuple(sys.path):
     if not item:
@@ -2548,13 +2743,50 @@ for item in tuple(sys.path):
     allowed = candidate in (stdlib, platstdlib)
     allowed = allowed or candidate.name in ("lib-dynload", "DLLs") and base in candidate.parents
     allowed = allowed or candidate.suffix == ".zip" and base in candidate.parents
-    if allowed:
+    if allowed and not under_package_install_root(candidate):
         sanitized.append(str(candidate))
 if not sanitized:
     abort()
 sys.path[:] = sanitized
 closed_path = tuple(sys.path)
 closed_hooks = tuple(sys.path_hooks)
+sys.path_importer_cache.clear()
+cache_probe = "_python_doctor_closed_cache_probe_"
+for item in closed_path:
+    importlib.machinery.PathFinder.find_spec(cache_probe, [item])
+
+def importer_fingerprint(key, importer):
+    if importer is None:
+        return ("none",)
+    if type(importer) is importlib.machinery.FileFinder:
+        if pathlib.Path(importer.path).resolve(strict=False) != pathlib.Path(key).resolve(strict=False):
+            abort()
+        allowed_factories = (
+            importlib.machinery.SourceFileLoader,
+            importlib.machinery.SourcelessFileLoader,
+            importlib.machinery.ExtensionFileLoader,
+        )
+        if any(
+            not isinstance(factory, type) or not issubclass(factory, allowed_factories)
+            for _suffix, factory in importer._loaders
+        ):
+            abort()
+        return ("file", importer.path, tuple(importer._loaders))
+    if type(importer) is zipimport.zipimporter:
+        archive = pathlib.Path(importer.archive).resolve(strict=False)
+        prefix = importer.prefix.replace("/", os.sep).replace("\\", os.sep).strip(os.sep)
+        expected_key = archive if not prefix else pathlib.Path(str(archive) + os.sep + prefix)
+        if pathlib.Path(key).resolve(strict=False) != expected_key.resolve(strict=False):
+            abort()
+        return ("zip", str(archive), prefix)
+    abort()
+
+if set(sys.path_importer_cache) != set(closed_path):
+    abort()
+closed_importer_cache = {
+    key: importer_fingerprint(key, importer)
+    for key, importer in sys.path_importer_cache.items()
+}
 
 class ExactLoader(importlib.machinery.SourceFileLoader):
     def __init__(self, fullname, path, digest):
@@ -2599,12 +2831,97 @@ class ClosedFinder(importlib.abc.MetaPathFinder):
 finder = ClosedFinder()
 sys.meta_path.insert(0, finder)
 closed_meta = tuple(sys.meta_path)
+trusted_roots = tuple(
+    pathlib.Path(item).resolve(strict=False)
+    for item in closed_path
+    if pathlib.Path(item).suffix != ".zip"
+)
+trusted_archives = tuple(
+    os.path.normcase(str(pathlib.Path(item).resolve(strict=False)))
+    for item in closed_path
+    if pathlib.Path(item).suffix == ".zip"
+)
+
+def trusted_origin(origin):
+    if origin in ("built-in", "frozen"):
+        return True
+    if not isinstance(origin, str):
+        return False
+    normalized = os.path.normcase(origin)
+    if any(
+        normalized == archive or normalized.startswith(archive + os.sep)
+        for archive in trusted_archives
+    ):
+        return True
+    try:
+        resolved = pathlib.Path(origin).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    if under_package_install_root(resolved):
+        return False
+    return any(resolved == base_path or base_path in resolved.parents for base_path in trusted_roots)
+
+def validate_trusted_module(module):
+    spec = getattr(module, "__spec__", None)
+    loader = getattr(module, "__loader__", None)
+    if spec is None or spec.loader is not loader or not trusted_origin(spec.origin):
+        abort()
+    if loader in (importlib.machinery.BuiltinImporter, importlib.machinery.FrozenImporter):
+        return
+    allowed_loaders = (
+        importlib.machinery.SourceFileLoader,
+        importlib.machinery.SourcelessFileLoader,
+        importlib.machinery.ExtensionFileLoader,
+        zipimport.zipimporter,
+    )
+    if not isinstance(loader, allowed_loaders):
+        abort()
+    loader_path = getattr(loader, "path", getattr(loader, "archive", spec.origin))
+    if not trusted_origin(loader_path):
+        abort()
+
+baseline_modules = {}
+for name, module in tuple(sys.modules.items()):
+    if name.partition(".")[0] in finder.prefixes:
+        abort()
+    spec = getattr(module, "__spec__", None)
+    if spec is not None:
+        validate_trusted_module(module)
+    baseline_modules[name] = (
+        module,
+        spec,
+        getattr(module, "__loader__", None),
+        getattr(module, "__file__", None),
+    )
 
 def verify_import_state():
     if tuple(sys.path) != closed_path or tuple(sys.path_hooks) != closed_hooks or tuple(sys.meta_path) != closed_meta:
         abort()
+    for item in closed_path:
+        importlib.machinery.PathFinder.find_spec(cache_probe, [item])
+    if not set(closed_importer_cache).issubset(sys.path_importer_cache):
+        abort()
+    for key, observed_importer in sys.path_importer_cache.items():
+        observed_fingerprint = importer_fingerprint(key, observed_importer)
+        if key in closed_importer_cache:
+            if observed_fingerprint != closed_importer_cache[key]:
+                abort()
+        elif observed_fingerprint == ("none",) or not trusted_origin(key):
+            abort()
     for name, module in tuple(sys.modules.items()):
         if name.partition(".")[0] not in finder.prefixes:
+            if name in baseline_modules:
+                expected = baseline_modules[name]
+                observed = (
+                    module,
+                    getattr(module, "__spec__", None),
+                    getattr(module, "__loader__", None),
+                    getattr(module, "__file__", None),
+                )
+                if observed != expected:
+                    abort()
+            else:
+                validate_trusted_module(module)
             continue
         if name not in modules:
             abort()
@@ -2712,7 +3029,7 @@ for stage, success_code in stages:
 raise SystemExit(0)
 
 PY
-python -I -B -X utf8 -m compileall -q scripts tests
+python -I -B -X utf8 -S -m compileall -q scripts tests
 git add .github/workflows/governance-oracles-windows.yml scripts/__init__.py scripts/governance/__init__.py scripts/governance/validate_oracles.py tests/test_governance_oracles.py tests/fixtures/governance/expected-requirement-ids.txt tests/fixtures/governance/expected-skill-ids.txt tests/fixtures/governance/expected-profile-domain-ids.txt tests/fixtures/governance/expected-provenance-sources.toml tests/fixtures/governance/expected-gate-clauses.toml tests/fixtures/governance/expected-gate-checks.toml docs/audits/2026-07-14-governance-oracle-review.md
 git diff --cached --name-only
 git commit -m "docs(governance): freeze independent oracle inventories"
