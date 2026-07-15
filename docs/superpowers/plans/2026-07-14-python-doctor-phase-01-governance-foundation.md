@@ -116,6 +116,13 @@ fixture provisioning failure, or any failed cell is `FAIL`; no
 `continue-on-error`, silent skip, or provisional Windows support claim is
 allowed.
 
+The Windows workflow has no `paths` or `paths-ignore` event filter. It runs for
+every pull request and for every push to `agent/phase-01-governance`, so a
+change anywhere in the current or future Python startup/import trusted
+computing base cannot bypass the matrix merely because its pathname was not
+anticipated when Task 0 was written. The push event retains that exact branch
+restriction; `workflow_dispatch` remains available for an explicit rerun.
+
 Within this new Task 0 Windows workflow, neither its steps nor the Task 0 oracle
 code it invokes contain analytics, telemetry, crash reporting, update checks,
 report or source uploads, artifact publication, coverage service, SARIF
@@ -1650,6 +1657,36 @@ non-bidirectional requirement/clause edges, and truth criteria outside the
 closed registry. Run it before fixture creation and record the expected missing-
 oracle failure.
 
+The validator has no third-party TOML dependency. CPython 3.11–3.14 use
+`tomllib` as the authoritative parser and also exercise the embedded fallback
+directly. CPython 3.9 and 3.10 do not provide `tomllib`; those cells honestly
+exercise the fallback only and make no native-parser parity claim. The fallback
+accepts only the closed subset needed by the three oracle fixtures: bare keys,
+single-line basic and literal strings, decimal integers, booleans, arrays,
+inline tables, and array-of-table headers. Every accepted document must also be
+valid TOML 1.0; syntax outside that subset fails closed rather than being
+silently reinterpreted.
+
+Before recognizing or removing any comment, the fallback validates the entire
+decoded input and rejects TOML-forbidden raw control characters. It accepts
+line endings only as LF or CRLF, rejects a bare CR, and rejects Unicode NEL and
+line/paragraph separators U+0085, U+2028, and U+2029. Comment recognition is
+token aware: `#` inside either string form is data, while a comment outside a
+string ends only at an accepted line ending. Literal strings receive their own
+strict state handling; unterminated literals, quote-tail ambiguity, and a raw
+line ending in a single-line literal are controlled `invalid-toml` failures.
+No preprocessing step may turn malformed input into an accepted document.
+
+The RED/GREEN corpus includes valid LF and CRLF documents; forbidden controls
+before and after `#`; bare CR and each rejected Unicode separator; `#`, brackets,
+commas, and equals signs inside both string forms; malformed and unterminated
+literal strings; duplicate keys; malformed arrays, inline tables, and
+array-of-table headers; and trailing-token cases. On CPython 3.11–3.14 every
+valid corpus item must produce structurally equal native/fallback values and
+every invalid item must be rejected by both. The 3.9/3.10 cells must return the
+same frozen fallback dispositions for that corpus even though a native
+comparison is unavailable there.
+
 Run: `PYTHONPATH=src:. python -m unittest tests.test_governance_oracles -v`
 
 - [ ] **Step 2: Assign independent specification authors**
@@ -1665,10 +1702,11 @@ inventory. They do not author the manifests or runner.
 The oracle includes child IDs, required flags, clause/requirement edges, and
 truth criteria, but no executable command realization. The review records source
 document digests and all dispositions. `tests/test_governance_oracles.py` also
-freezes the Windows workflow's runner; exact Windows x64 patch matrix 3.9.13,
-3.10.11, 3.11.9, 3.12.10, 3.13.14, and 3.14.6; exact action SHAs; two fully
-qualified mandatory test names; full-module execution; and zero-skip result
-check. The native junction test is conditionally defined only when
+freezes the Windows workflow's all-PR and branch-restricted all-push triggers
+with no path filter; runner; exact Windows x64 patch matrix 3.9.13, 3.10.11,
+3.11.9, 3.12.10, 3.13.14, and 3.14.6; exact action SHAs; two fully qualified
+mandatory test names; full-module execution; and zero-skip result check. The
+native junction test is conditionally defined only when
 `os.name == "nt"`; it has no skip decorator, and failure to provision its
 junction fixture fails the test. The simulated reparse test remains registered
 on every platform. A source regression asserts that the module contains no
@@ -1688,21 +1726,9 @@ name: Governance oracles on Windows
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/governance-oracles-windows.yml"
-      - "docs/**"
-      - "scripts/governance/**"
-      - "tests/fixtures/governance/**"
-      - "tests/test_governance_oracles.py"
   push:
     branches:
       - "agent/phase-01-governance"
-    paths:
-      - ".github/workflows/governance-oracles-windows.yml"
-      - "docs/**"
-      - "scripts/governance/**"
-      - "tests/fixtures/governance/**"
-      - "tests/test_governance_oracles.py"
   workflow_dispatch:
 
 permissions:
