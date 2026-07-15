@@ -19,6 +19,106 @@ behavior or migrate packages.
 `unittest`, TOML manifests, JSON schemas/results, Git, pinned Bubblewrap on
 Linux, and pinned OpenSSL with Ed25519 verification support.
 
+### Post-publication Task -1 control amendment: Task 0 oracle portability
+
+This section is a post-publication Task -1 control amendment governing Task 0.
+It must be committed as a plan-only descendant of the previously published
+Task -1 anchor, independently reviewed, published, captured as a new anchor
+generation, and accepted as the live `PublishedAnchorCheckpoint` before Task 0
+is dispatched. The five-field
+`docs/evidence/contracts/phase-01-governance.toml` bootstrap contract and its
+historical blob remain byte-identical. Task 0 never edits this plan or that
+contract; either edit is a task-separation failure, not a digest update.
+
+Checkpoint generations are append-only. Before amendment authoring begins, the
+orchestrator clears the old in-memory checkpoint and prohibits Task 0 dispatch.
+The old sealed external-evidence generation remains immutable and is neither
+renamed, overwritten, nor deleted. The replacement projection, author
+inventory, and review transcript are written and reviewed in a new sibling
+generation directory. A generation contains exactly
+`published-anchor-projection.json`, `author-inventory.json`, and
+`published-anchor-reviews.json`. Its `generation_id` is the lowercase SHA-256
+of the ASCII encoding of the three lowercase file SHA-256 values in that order,
+each followed by LF; its directory name is `generation-<generation_id>`.
+
+After a generation is sealed, the generations' parent contains the only
+mutable durable object, `live-generation.json`. It is a closed canonical JSON
+object using the same RFC 8785-plus-one-LF encoding, with exactly
+`schema_version`, `run_id`, `generation_id`, `relative_directory`, `anchor_sha`,
+`anchor_tree`, `projection_sha256`, `author_inventory_sha256`, and
+`reviews_sha256`. `schema_version` is
+`published-anchor-live-pointer/v1`; `relative_directory` is exactly
+`generation-<generation_id>` with no path separator. Only after both independent
+reviews pass does the orchestrator atomically replace this pointer, resolve
+`PHASE_01_EXTERNAL_EVIDENCE_ROOT` to that sibling, verify all three hashes, and
+create the new in-memory checkpoint. The previous generation stays sealed but
+is superseded and inadmissible for a new Task 0 dispatch. The dispatch record
+is written under the generations' parent as
+`task-00-dispatch-<generation_id>.json`, never inside a sealed generation. It
+binds the new generation ID, live-pointer digest, three sealed-file digests,
+and anchor commit/tree.
+
+Task 0 oracle validation and later schema/manifest tooling must remain
+functional on Linux, macOS, and Windows across the supported CPython matrix.
+Where the host exposes descriptor-relative open, directory-only open, and
+no-follow flags, the oracle reader uses handle-bound component traversal and
+binds every opened directory identity before reading the final file.
+
+Where those primitives are unavailable, portable snapshot mode must reject
+components that are symlinks, observed Windows reparse points, or non-regular
+inputs at inspection time; require resolved-root containment; bind the opened
+file's identity and metadata to that inspection; cap the read; and repeat path
+and descriptor checks afterward. This mode detects persistent path substitution
+and file mutation. It does not provide atomic component containment and cannot
+exclude transient namespace or component substitution by a concurrent
+malicious mutator, including substitutions fully restored between checks. It
+is limited to fixed governance inputs in an orchestration-owned clean checkout
+with no untrusted concurrent mutator.
+
+Portable snapshot evidence is inadmissible for `G13-HOSTILE-REPOSITORY` and
+cannot make that check pass. Because the missing secure backend is
+project-owned and `G13-HOSTILE-REPOSITORY` is not externally blockable,
+`G13-HOSTILE-REPOSITORY` must `FAIL` until secure traversal or a reviewed native
+reader is available. A strong Windows claim requires a separately reviewed
+native handle-relative no-reparse reader and green pinned Windows CI across
+CPython 3.9–3.14; portable snapshot mode permits ordinary cross-platform oracle,
+schema, and manifest validation but cannot supply that hostile-repository
+claim.
+
+Every Task 0 local and CI unittest run must satisfy
+`result.wasSuccessful() and skip_count == 0`. A platform-inapplicable native
+test is conditionally defined and registered only on its target platform; it
+must not be registered as a skipped test. Task 0 removes every `skipTest`,
+`skipIf`, `skipUnless`, and skip decorator from
+`tests/test_governance_oracles.py`. A required host fixture that cannot be
+provisioned is a test failure. A capability-independent behavior uses a
+deterministic simulated regression; a platform-native behavior is registered
+only on that platform and is mandatory in the corresponding pinned CI job.
+Windows coverage is mandatory on
+`windows-2022` for the exact Windows x64 patch selectors 3.9.13, 3.10.11,
+3.11.9, 3.12.10, 3.13.14, and 3.14.6. Every cell must directly execute the
+fully qualified native test
+`tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip`
+and the simulated reparse test
+`tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level`,
+then execute the full oracle module. Missing test registration, a skip, junction
+fixture provisioning failure, or any failed cell is `FAIL`; no
+`continue-on-error`, silent skip, or provisional Windows support claim is
+allowed.
+
+Within this new Task 0 Windows workflow, neither its steps nor the Task 0 oracle
+code it invokes contain analytics, telemetry, crash reporting, update checks,
+report or source uploads, artifact publication, coverage service, SARIF
+publication, dependency cache, persisted Git credentials, or package-manager
+installation. Checkout explicitly sets `persist-credentials: false`;
+setup-python selects the matrix interpreter, and no `pip`, `uv`, `poetry`, or
+other package-install command runs. This scoped claim does not describe or
+authorize unrelated pre-existing workflows. GitHub-hosted CI necessarily sends
+job logs, check statuses, and operational metadata to GitHub as part of
+executing the requested workflow. That infrastructure operation is not a
+Python Doctor telemetry feature, and the project does not claim absolute
+metadata silence for cloud CI.
+
 ## Global constraints
 
 - Do not read, copy, translate, paraphrase, compare against, or structurally
@@ -958,12 +1058,16 @@ writes the transcript exactly once, recomputes all three external-file digests, 
 the in-memory `PublishedAnchorCheckpoint` only after all comparisons pass.
 There is deliberately no repository constructor or verifier for this
 checkpoint. Task 0 may be dispatched only in that same live session and its
-separate session dispatch record binds all three external-file SHA-256 values.
-The sealed Task -1 files are never mutated. If the session or
-any external file is lost, moved, or changed, rerun both reviews; do not
-reconstruct approval from repository strings. A mismatch, missing object,
-wrong repository/PR, substituted commit, dirty worktree, incomplete file set,
-or self-review is `FAIL`; GitHub/reviewer unavailability is `BLOCKED`.
+separate session dispatch record binds the generation ID, live-pointer digest,
+and all three external-file SHA-256 values. The content-addressed commit, tree,
+and files sealed by one Task -1 generation are never mutated. A later approved
+post-publication plan-only amendment creates a new descendant and sibling
+generation under this amendment's supersession protocol; it does not rewrite
+the prior Git objects or external generation. If the session or any external
+file is lost, moved, or changed, rerun both reviews; do not reconstruct approval
+from repository strings. A mismatch, missing object, wrong repository/PR,
+substituted commit, dirty worktree, incomplete file set, or self-review is
+`FAIL`; GitHub/reviewer unavailability is `BLOCKED`.
 
 Branch movement after capture cannot mutate the content-addressed commit/tree.
 Every later orchestration identity check binds the checkpoint's projection and
@@ -995,26 +1099,83 @@ a prerequisite for governance Task 0.
 - Create: `scripts/governance/__init__.py`
 - Create: `scripts/governance/validate_oracles.py`
 - Create: `tests/test_governance_oracles.py`
+- Create: `.github/workflows/governance-oracles-windows.yml`
 
 - [ ] **Step 0: Consume the live Task -1 checkpoint**
 
 Before dispatching any Task 0 author, the root orchestrator confirms the
 in-memory `PublishedAnchorCheckpoint` still exists, recomputes all three external
 file digests, rechecks `HEAD`, tree, upstream, ancestry, and cleanliness, and
-writes a separate `task-00-dispatch.json` beside the sealed files. That closed
-session record binds schema `task-dispatch/v1`, task ID `0`, the three sealed
-digests, anchor SHA/tree, author collaboration task path, and UTC dispatch time;
-it never modifies a Task -1 file. The Task 0 author receives the immutable
-control-document paths and anchor SHA, never mutable PR prose. Run in the
-execution worktree:
+writes a separate `task-00-dispatch-<generation_id>.json` under the external
+evidence parent, never inside the exact three-file sealed generation. That
+closed session record binds schema `task-dispatch/v1`, task ID `0`, the three
+sealed digests, generation ID, live-pointer digest, anchor SHA/tree, author
+collaboration task path, and UTC dispatch time; it never modifies a Task -1
+file. The Task 0 author receives the immutable control-document paths and anchor
+SHA, never mutable PR prose. Run in the execution worktree:
 
 ```bash
 set -eu
 test -n "${PUBLISHED_ANCHOR_PROJECTION_SHA256:-}"
 test -n "${PUBLISHED_ANCHOR_AUTHORS_SHA256:-}"
 test -n "${PUBLISHED_ANCHOR_REVIEWS_SHA256:-}"
+test -n "${PUBLISHED_ANCHOR_GENERATION_ID:-}"
+test -n "${PUBLISHED_ANCHOR_LIVE_POINTER_SHA256:-}"
+test -n "${PHASE_01_EXTERNAL_EVIDENCE_PARENT:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_SHA:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_TREE:-}"
 test "${PHASE_01_EXTERNAL_EVIDENCE_ROOT#/}" != "$PHASE_01_EXTERNAL_EVIDENCE_ROOT"
 EVIDENCE_ROOT=$(realpath "$PHASE_01_EXTERNAL_EVIDENCE_ROOT")
+EVIDENCE_PARENT=$(realpath "$PHASE_01_EXTERNAL_EVIDENCE_PARENT")
+test "$EVIDENCE_ROOT" = "$EVIDENCE_PARENT/generation-$PUBLISHED_ANCHOR_GENERATION_ID"
+test "$(sha256sum "$EVIDENCE_PARENT/live-generation.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_LIVE_POINTER_SHA256"
+python - <<'PY'
+import hashlib
+import json
+import os
+from pathlib import Path
+
+parent = Path(os.environ["PHASE_01_EXTERNAL_EVIDENCE_PARENT"]).resolve(strict=True)
+pointer = json.loads((parent / "live-generation.json").read_text("utf-8"))
+generation = Path(os.environ["PHASE_01_EXTERNAL_EVIDENCE_ROOT"]).resolve(strict=True)
+keys = {
+    "schema_version",
+    "run_id",
+    "generation_id",
+    "relative_directory",
+    "anchor_sha",
+    "anchor_tree",
+    "projection_sha256",
+    "author_inventory_sha256",
+    "reviews_sha256",
+}
+assert set(pointer) == keys
+assert pointer["schema_version"] == "published-anchor-live-pointer/v1"
+assert pointer["run_id"] == "phase-01-governance-2026-07-14"
+assert pointer["generation_id"] == os.environ["PUBLISHED_ANCHOR_GENERATION_ID"]
+assert pointer["relative_directory"] == "generation-" + pointer["generation_id"]
+assert pointer["anchor_sha"] == os.environ["PHASE_01_PUBLISHED_ANCHOR_SHA"]
+assert pointer["anchor_tree"] == os.environ["PHASE_01_PUBLISHED_ANCHOR_TREE"]
+assert pointer["projection_sha256"] == os.environ["PUBLISHED_ANCHOR_PROJECTION_SHA256"]
+assert pointer["author_inventory_sha256"] == os.environ["PUBLISHED_ANCHOR_AUTHORS_SHA256"]
+assert pointer["reviews_sha256"] == os.environ["PUBLISHED_ANCHOR_REVIEWS_SHA256"]
+material = "".join(
+    pointer[key] + "\n"
+    for key in (
+        "projection_sha256",
+        "author_inventory_sha256",
+        "reviews_sha256",
+    )
+).encode("ascii")
+assert hashlib.sha256(material).hexdigest() == pointer["generation_id"]
+assert sorted(path.name for path in generation.iterdir()) == [
+    "author-inventory.json",
+    "published-anchor-projection.json",
+    "published-anchor-reviews.json",
+]
+dispatch = parent / f"task-00-dispatch-{pointer['generation_id']}.json"
+assert dispatch.is_file()
+PY
 python -c 'import os,pathlib,subprocess; e=pathlib.Path(os.environ["PHASE_01_EXTERNAL_EVIDENCE_ROOT"]).resolve(strict=True); raw=subprocess.check_output(["git","worktree","list","--porcelain","-z"]); roots=[pathlib.Path(x[9:].decode("utf-8","strict")).resolve(strict=True) for x in raw.split(b"\0") if x.startswith(b"worktree ")]; common=pathlib.Path(subprocess.check_output(["git","rev-parse","--path-format=absolute","--git-common-dir"],text=True).strip()).resolve(strict=True); assert roots and all(e != root and root not in e.parents for root in roots); assert e != common and common not in e.parents'
 test "$(sha256sum "$EVIDENCE_ROOT/published-anchor-projection.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_PROJECTION_SHA256"
 test "$(sha256sum "$EVIDENCE_ROOT/author-inventory.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_AUTHORS_SHA256"
@@ -1050,11 +1211,111 @@ inventory. They do not author the manifests or runner.
 
 The oracle includes child IDs, required flags, clause/requirement edges, and
 truth criteria, but no executable command realization. The review records source
-document digests and all dispositions. Commit these exact files before Task 1.
+document digests and all dispositions. `tests/test_governance_oracles.py` also
+freezes the Windows workflow's runner; exact Windows x64 patch matrix 3.9.13,
+3.10.11, 3.11.9, 3.12.10, 3.13.14, and 3.14.6; exact action SHAs; two fully
+qualified mandatory test names; full-module execution; and zero-skip result
+check. The native junction test is conditionally defined only when
+`os.name == "nt"`; it has no skip decorator, and failure to provision its
+junction fixture fails the test. The simulated reparse test remains registered
+on every platform. A source regression asserts that the module contains no
+runtime skip call or unittest skip decorator.
+
+Create `.github/workflows/governance-oracles-windows.yml` exactly as follows.
+The two action revisions are the verified official `actions/checkout` v7.0.0
+and `actions/setup-python` v6.3.0 commits. Both use Node 24 and require runner
+2.327.1 or newer; the hosted `windows-2022` runner satisfies that prerequisite.
+The official setup-python versions manifest supplies the exact stable Windows
+x64 selectors 3.9.13, 3.10.11, 3.11.9, 3.12.10, 3.13.14, and 3.14.6. Later
+security releases for the older minors are source-only and have no Windows x64
+asset, so moving minor-only selectors are forbidden.
+
+```yaml
+name: Governance oracles on Windows
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/governance-oracles-windows.yml"
+      - "docs/**"
+      - "scripts/governance/**"
+      - "tests/fixtures/governance/**"
+      - "tests/test_governance_oracles.py"
+  push:
+    branches:
+      - "agent/phase-01-governance"
+    paths:
+      - ".github/workflows/governance-oracles-windows.yml"
+      - "docs/**"
+      - "scripts/governance/**"
+      - "tests/fixtures/governance/**"
+      - "tests/test_governance_oracles.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  governance-oracles-windows:
+    name: CPython ${{ matrix.python-version }} / windows-2022
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.9.13"
+          - "3.10.11"
+          - "3.11.9"
+          - "3.12.10"
+          - "3.13.14"
+          - "3.14.6"
+    steps:
+      - name: Check out the immutable subject
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Select the matrix interpreter
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: "x64"
+          check-latest: false
+      - name: Run mandatory native, simulated, and full oracle tests
+        shell: pwsh
+        env:
+          PYTHONPATH: "src;."
+        run: |
+          @'
+          import sys
+          import unittest
+
+          required = (
+              "tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip",
+              "tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level",
+          )
+
+          def run_zero_skip(name: str, expected_count=None) -> bool:
+              suite = unittest.defaultTestLoader.loadTestsFromName(name)
+              if expected_count is not None and suite.countTestCases() != expected_count:
+                  return False
+              result = unittest.TextTestRunner(verbosity=2).run(suite)
+              skip_count = len(result.skipped)
+              return result.wasSuccessful() and skip_count == 0
+
+          required_results = tuple(run_zero_skip(name, 1) for name in required)
+          success = all(required_results)
+          success = run_zero_skip("tests.test_governance_oracles") and success
+          raise SystemExit(0 if success else 1)
+          '@ | python -
+```
+
+Run the local zero-skip gate and commit these exact files before Task 1.
 
 ```bash
 PYTHONPATH=src:. python -m unittest tests.test_governance_oracles -v
-git add scripts/__init__.py scripts/governance/__init__.py scripts/governance/validate_oracles.py tests/test_governance_oracles.py tests/fixtures/governance/expected-requirement-ids.txt tests/fixtures/governance/expected-skill-ids.txt tests/fixtures/governance/expected-profile-domain-ids.txt tests/fixtures/governance/expected-provenance-sources.toml tests/fixtures/governance/expected-gate-clauses.toml tests/fixtures/governance/expected-gate-checks.toml docs/audits/2026-07-14-governance-oracle-review.md
+python -c 'import sys,unittest; suite=unittest.defaultTestLoader.loadTestsFromName("tests.test_governance_oracles"); result=unittest.TextTestRunner(verbosity=2).run(suite); skip_count=len(result.skipped); raise SystemExit(0 if result.wasSuccessful() and skip_count == 0 else 1)'
+git add .github/workflows/governance-oracles-windows.yml scripts/__init__.py scripts/governance/__init__.py scripts/governance/validate_oracles.py tests/test_governance_oracles.py tests/fixtures/governance/expected-requirement-ids.txt tests/fixtures/governance/expected-skill-ids.txt tests/fixtures/governance/expected-profile-domain-ids.txt tests/fixtures/governance/expected-provenance-sources.toml tests/fixtures/governance/expected-gate-clauses.toml tests/fixtures/governance/expected-gate-checks.toml docs/audits/2026-07-14-governance-oracle-review.md
 git diff --cached --name-only
 git commit -m "docs(governance): freeze independent oracle inventories"
 ```
