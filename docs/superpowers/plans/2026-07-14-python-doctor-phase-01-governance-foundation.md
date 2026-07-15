@@ -45,18 +45,28 @@ After a generation is sealed, the generations' parent contains the only
 mutable durable object, `live-generation.json`. It is a closed canonical JSON
 object using the same RFC 8785-plus-one-LF encoding, with exactly
 `schema_version`, `run_id`, `generation_id`, `relative_directory`, `anchor_sha`,
-`anchor_tree`, `projection_sha256`, `author_inventory_sha256`, and
-`reviews_sha256`. `schema_version` is
+`anchor_tree`, `evidence_parent_identity`, `projection_sha256`,
+`author_inventory_sha256`, and `reviews_sha256`. `schema_version` is
 `published-anchor-live-pointer/v1`; `relative_directory` is exactly
 `generation-<generation_id>` with no path separator. Only after both independent
-reviews pass does the orchestrator atomically replace this pointer, resolve
-`PHASE_01_EXTERNAL_EVIDENCE_ROOT` to that sibling, verify all three hashes, and
-create the new in-memory checkpoint. The previous generation stays sealed but
-is superseded and inadmissible for a new Task 0 dispatch. The dispatch record
-is written under the generations' parent as
+reviews pass does the orchestrator atomically replace this pointer. The
+`evidence_parent_identity` is the lowercase SHA-256 of the UTF-8 encoding of the
+canonical resolved, native-case-normalized evidence-parent path plus LF. The
+orchestrator resolves `PHASE_01_EXTERNAL_EVIDENCE_ROOT` to that sibling,
+verifies the parent identity and all three hashes, and creates the new in-memory
+checkpoint bound to that identity. Moving or copying the evidence tree changes
+the resolved identity and is `FAIL`. The previous generation stays sealed but
+is superseded and inadmissible for a new Task 0 dispatch.
+
+The orchestration-owned `PHASE_01_TASK_DISPATCH_ROOT` is a separate canonical
+directory, neither equal to nor an ancestor or descendant of the evidence
+parent or any Git worktree. The dispatch record is written there as
 `task-00-dispatch-<generation_id>.json`, never inside a sealed generation. It
-binds the new generation ID, live-pointer digest, three sealed-file digests,
-and anchor commit/tree.
+binds the new generation ID, evidence-parent identity, live-pointer digest,
+three sealed-file digests, anchor commit/tree, exact Task 0 author path, and UTC
+dispatch time. Its own captured-byte SHA-256 is supplied as
+`PUBLISHED_TASK_00_DISPATCH_SHA256` and becomes an immutable Task 0 audit and
+acceptance-evidence input.
 
 Task 0 oracle validation and later schema/manifest tooling must remain
 functional on Linux, macOS, and Windows across the supported CPython matrix.
@@ -925,25 +935,75 @@ unique earlier commit that added the five-field contract and whose parent is
 every later Task -1 commit may change only this plan, and none may alter the
 contract's immutable projection.
 
-After publication, run the following exact handoff from the repository's main
-working tree. The authoring worktree must be clean. Preserve its locally
-recreated branch under `archive/phase-01-governance-local-<short-sha>`, remove
-only that clean worktree registration, fetch without force, and create the
-execution worktree from the connector-reported remote commit. Never delete the
-archival branch.
+After every initial or superseding Task -1 publication, run the following exact
+handoff from the repository's main working tree. The caller supplies absolute
+`REPOSITORY_ROOT`, current `TASK_MINUS_ONE_AUTHORING_WORKTREE`, desired
+`PHASE_01_EXECUTION_WORKTREE`, local `LOCAL_TASK_MINUS_ONE_CANDIDATE_SHA`, and
+connector-reported `PHASE_01_PUBLISHED_ANCHOR_SHA`. If an earlier execution
+worktree is still registered, `PREVIOUS_EXECUTION_WORKTREE` is its absolute
+path; otherwise it is empty. Every supplied worktree must share the repository
+common directory, be clean, and have a named branch. The procedure archives
+both the local amendment candidate and any prior execution generation before
+removing only their clean worktree registrations. It never deletes or rewrites
+an archive branch, never force-fetches, and recreates execution only from the
+verified connector commit.
 
 ```bash
 set -eu
-AUTHORING_WORKTREE=.worktrees/phase-01-governance
-EXECUTION_WORKTREE=.worktrees/phase-01-execution
+: "${REPOSITORY_ROOT:?absolute repository root is required}"
+: "${TASK_MINUS_ONE_AUTHORING_WORKTREE:?absolute authoring worktree is required}"
+: "${PHASE_01_EXECUTION_WORKTREE:?absolute execution worktree is required}"
+: "${LOCAL_TASK_MINUS_ONE_CANDIDATE_SHA:?local candidate SHA is required}"
+: "${PHASE_01_PUBLISHED_ANCHOR_SHA:?remote anchor SHA is required}"
+: "${PREVIOUS_EXECUTION_WORKTREE:=}"
+
+CANONICAL_BRANCH=agent/phase-01-governance
+REMOTE_TRACKING_REF=refs/remotes/origin/agent/phase-01-governance
+REPOSITORY_ROOT=$(realpath "$REPOSITORY_ROOT")
+AUTHORING_WORKTREE=$(realpath "$TASK_MINUS_ONE_AUTHORING_WORKTREE")
+EXECUTION_WORKTREE=$(realpath -m "$PHASE_01_EXECUTION_WORKTREE")
+COMMON_DIR=$(git -C "$REPOSITORY_ROOT" rev-parse --path-format=absolute --git-common-dir)
+test "$AUTHORING_WORKTREE" != "$REPOSITORY_ROOT"
+test "$AUTHORING_WORKTREE" != "$EXECUTION_WORKTREE"
+test "$(git -C "$AUTHORING_WORKTREE" rev-parse --path-format=absolute --git-common-dir)" = "$COMMON_DIR"
+test "$(git -C "$AUTHORING_WORKTREE" branch --show-current)" = "$CANONICAL_BRANCH"
+test "$(git -C "$AUTHORING_WORKTREE" rev-parse HEAD)" = "$LOCAL_TASK_MINUS_ONE_CANDIDATE_SHA"
 test -z "$(git -C "$AUTHORING_WORKTREE" status --porcelain=v1)"
+
+if test -n "$PREVIOUS_EXECUTION_WORKTREE"; then
+  PREVIOUS_EXECUTION_WORKTREE=$(realpath "$PREVIOUS_EXECUTION_WORKTREE")
+  test "$PREVIOUS_EXECUTION_WORKTREE" = "$EXECUTION_WORKTREE"
+  test "$PREVIOUS_EXECUTION_WORKTREE" != "$AUTHORING_WORKTREE"
+  test "$PREVIOUS_EXECUTION_WORKTREE" != "$REPOSITORY_ROOT"
+  test "$(git -C "$PREVIOUS_EXECUTION_WORKTREE" rev-parse --path-format=absolute --git-common-dir)" = "$COMMON_DIR"
+  test -n "$(git -C "$PREVIOUS_EXECUTION_WORKTREE" branch --show-current)"
+  test -z "$(git -C "$PREVIOUS_EXECUTION_WORKTREE" status --porcelain=v1)"
+  PREVIOUS_SHA=$(git -C "$PREVIOUS_EXECUTION_WORKTREE" rev-parse HEAD)
+  PREVIOUS_SHORT=$(git -C "$PREVIOUS_EXECUTION_WORKTREE" rev-parse --short=12 HEAD)
+  PREVIOUS_ARCHIVE="archive/phase-01-execution-pre-generation-$PREVIOUS_SHORT"
+  test -z "$(git -C "$REPOSITORY_ROOT" branch --list "$PREVIOUS_ARCHIVE")"
+  git -C "$PREVIOUS_EXECUTION_WORKTREE" branch -m "$PREVIOUS_ARCHIVE"
+  git -C "$REPOSITORY_ROOT" worktree remove "$PREVIOUS_EXECUTION_WORKTREE"
+  test "$(git -C "$REPOSITORY_ROOT" rev-parse "refs/heads/$PREVIOUS_ARCHIVE")" = "$PREVIOUS_SHA"
+fi
+
 LOCAL_SHORT=$(git -C "$AUTHORING_WORKTREE" rev-parse --short=12 HEAD)
-git -C "$AUTHORING_WORKTREE" branch -m "archive/phase-01-governance-local-$LOCAL_SHORT"
-git worktree remove "$AUTHORING_WORKTREE"
-git fetch origin refs/heads/agent/phase-01-governance:refs/remotes/origin/agent/phase-01-governance
-test "$(git rev-parse refs/remotes/origin/agent/phase-01-governance)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
-git worktree add -b agent/phase-01-governance "$EXECUTION_WORKTREE" "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+LOCAL_ARCHIVE="archive/phase-01-governance-local-$LOCAL_SHORT"
+test -z "$(git -C "$REPOSITORY_ROOT" branch --list "$LOCAL_ARCHIVE")"
+git -C "$AUTHORING_WORKTREE" branch -m "$LOCAL_ARCHIVE"
+git -C "$REPOSITORY_ROOT" worktree remove "$AUTHORING_WORKTREE"
+test "$(git -C "$REPOSITORY_ROOT" rev-parse "refs/heads/$LOCAL_ARCHIVE")" = "$LOCAL_TASK_MINUS_ONE_CANDIDATE_SHA"
+test ! -e "$EXECUTION_WORKTREE"
+
+git -C "$REPOSITORY_ROOT" fetch origin refs/heads/agent/phase-01-governance:refs/remotes/origin/agent/phase-01-governance
+test "$(git -C "$REPOSITORY_ROOT" rev-parse "$REMOTE_TRACKING_REF")" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test -z "$(git -C "$REPOSITORY_ROOT" branch --list "$CANONICAL_BRANCH")"
+git -C "$REPOSITORY_ROOT" worktree add -b "$CANONICAL_BRANCH" "$EXECUTION_WORKTREE" "$REMOTE_TRACKING_REF"
 git -C "$EXECUTION_WORKTREE" branch --set-upstream-to=origin/agent/phase-01-governance
+test "$(git -C "$EXECUTION_WORKTREE" rev-parse HEAD)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git -C "$EXECUTION_WORKTREE" rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git -C "$EXECUTION_WORKTREE" branch --show-current)" = "$CANONICAL_BRANCH"
+test -z "$(git -C "$EXECUTION_WORKTREE" status --porcelain=v1)"
 ```
 
 This preserves the five-field contract's branch identity while ensuring
@@ -1058,9 +1118,10 @@ writes the transcript exactly once, recomputes all three external-file digests, 
 the in-memory `PublishedAnchorCheckpoint` only after all comparisons pass.
 There is deliberately no repository constructor or verifier for this
 checkpoint. Task 0 may be dispatched only in that same live session and its
-separate session dispatch record binds the generation ID, live-pointer digest,
-and all three external-file SHA-256 values. The content-addressed commit, tree,
-and files sealed by one Task -1 generation are never mutated. A later approved
+separate session dispatch record binds the generation ID, evidence-parent
+identity, live-pointer digest, all three external-file SHA-256 values, and its
+own captured-byte digest. The content-addressed commit, tree, and files sealed
+by one Task -1 generation are never mutated. A later approved
 post-publication plan-only amendment creates a new descendant and sibling
 generation under this amendment's supersession protocol; it does not rewrite
 the prior Git objects or external generation. If the session or any external
@@ -1106,13 +1167,31 @@ a prerequisite for governance Task 0.
 Before dispatching any Task 0 author, the root orchestrator confirms the
 in-memory `PublishedAnchorCheckpoint` still exists, recomputes all three external
 file digests, rechecks `HEAD`, tree, upstream, ancestry, and cleanliness, and
-writes a separate `task-00-dispatch-<generation_id>.json` under the external
-evidence parent, never inside the exact three-file sealed generation. That
-closed session record binds schema `task-dispatch/v1`, task ID `0`, the three
-sealed digests, generation ID, live-pointer digest, anchor SHA/tree, author
-collaboration task path, and UTC dispatch time; it never modifies a Task -1
-file. The Task 0 author receives the immutable control-document paths and anchor
-SHA, never mutable PR prose. Run in the execution worktree:
+writes `task-00-dispatch-<generation_id>.json` under the separate
+`PHASE_01_TASK_DISPATCH_ROOT`, never inside the exact three-file sealed
+generation or its parent. The dispatch payload has exactly these closed keys:
+`schema_version: str`, `task_id: int`, `generation_id: str`,
+`evidence_parent_identity: str`, `live_pointer_sha256: str`,
+`projection_sha256: str`, `author_inventory_sha256: str`,
+`reviews_sha256: str`, `anchor_sha: str`, `anchor_tree: str`,
+`author_task_path: str`, and `dispatched_at: str`. Its schema is exactly
+`task-dispatch/v1`, task ID is integer `0`, hashes have their exact lowercase
+40/64-hex widths, author path equals the dispatched collaboration task, and
+time is whole-second UTC RFC 3339 no more than 15 minutes old and not in the
+future. Canonical bytes use RFC 8785's applicable closed string/integer subset
+plus one LF.
+
+Acceptance rejects a zero-byte dispatch, `dispatch file exceeds 16384 bytes`,
+`duplicate dispatch key`, `dispatch is stale`, unrelated field values,
+symlinks, observed Windows reparse points, and non-regular inputs. Pointer,
+three sealed files, and dispatch are each captured once through a bounded
+no-follow regular-file reader with before/opened/after descriptor and path
+identity checks. Digests and JSON parsing consume those same captured bytes.
+The process runs under isolated Python with no inherited `PYTHON*` behavior,
+uses explicit conditional failures rather than optimization-removable
+`assert`, and binds the dispatch byte digest into the Task 0 audit and
+acceptance evidence. The Task 0 author receives immutable control-document
+paths and anchor SHA, never mutable PR prose. Run in the execution worktree:
 
 ```bash
 set -eu
@@ -1121,72 +1200,362 @@ test -n "${PUBLISHED_ANCHOR_AUTHORS_SHA256:-}"
 test -n "${PUBLISHED_ANCHOR_REVIEWS_SHA256:-}"
 test -n "${PUBLISHED_ANCHOR_GENERATION_ID:-}"
 test -n "${PUBLISHED_ANCHOR_LIVE_POINTER_SHA256:-}"
+test -n "${PUBLISHED_ANCHOR_EVIDENCE_PARENT_IDENTITY:-}"
+test -n "${PUBLISHED_TASK_00_DISPATCH_SHA256:-}"
+test -n "${TASK_00_AUTHOR_TASK_PATH:-}"
 test -n "${PHASE_01_EXTERNAL_EVIDENCE_PARENT:-}"
+test -n "${PHASE_01_EXTERNAL_EVIDENCE_ROOT:-}"
+test -n "${PHASE_01_TASK_DISPATCH_ROOT:-}"
 test -n "${PHASE_01_PUBLISHED_ANCHOR_SHA:-}"
 test -n "${PHASE_01_PUBLISHED_ANCHOR_TREE:-}"
-test "${PHASE_01_EXTERNAL_EVIDENCE_ROOT#/}" != "$PHASE_01_EXTERNAL_EVIDENCE_ROOT"
-EVIDENCE_ROOT=$(realpath "$PHASE_01_EXTERNAL_EVIDENCE_ROOT")
-EVIDENCE_PARENT=$(realpath "$PHASE_01_EXTERNAL_EVIDENCE_PARENT")
-test "$EVIDENCE_ROOT" = "$EVIDENCE_PARENT/generation-$PUBLISHED_ANCHOR_GENERATION_ID"
-test "$(sha256sum "$EVIDENCE_PARENT/live-generation.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_LIVE_POINTER_SHA256"
-python - <<'PY'
+env -i PATH="$PATH" LC_ALL=C.UTF-8 python -I -B - \
+  "$PHASE_01_EXTERNAL_EVIDENCE_PARENT" \
+  "$PHASE_01_EXTERNAL_EVIDENCE_ROOT" \
+  "$PHASE_01_TASK_DISPATCH_ROOT" \
+  "$PUBLISHED_ANCHOR_GENERATION_ID" \
+  "$PUBLISHED_ANCHOR_EVIDENCE_PARENT_IDENTITY" \
+  "$PUBLISHED_ANCHOR_LIVE_POINTER_SHA256" \
+  "$PUBLISHED_ANCHOR_PROJECTION_SHA256" \
+  "$PUBLISHED_ANCHOR_AUTHORS_SHA256" \
+  "$PUBLISHED_ANCHOR_REVIEWS_SHA256" \
+  "$PUBLISHED_TASK_00_DISPATCH_SHA256" \
+  "$PHASE_01_PUBLISHED_ANCHOR_SHA" \
+  "$PHASE_01_PUBLISHED_ANCHOR_TREE" \
+  "$TASK_00_AUTHOR_TASK_PATH" <<'PY'
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
+import re
+import stat
+import subprocess
+import sys
 from pathlib import Path
 
-parent = Path(os.environ["PHASE_01_EXTERNAL_EVIDENCE_PARENT"]).resolve(strict=True)
-pointer = json.loads((parent / "live-generation.json").read_text("utf-8"))
-generation = Path(os.environ["PHASE_01_EXTERNAL_EVIDENCE_ROOT"]).resolve(strict=True)
-keys = {
-    "schema_version",
-    "run_id",
-    "generation_id",
-    "relative_directory",
-    "anchor_sha",
-    "anchor_tree",
-    "projection_sha256",
-    "author_inventory_sha256",
-    "reviews_sha256",
-}
-assert set(pointer) == keys
-assert pointer["schema_version"] == "published-anchor-live-pointer/v1"
-assert pointer["run_id"] == "phase-01-governance-2026-07-14"
-assert pointer["generation_id"] == os.environ["PUBLISHED_ANCHOR_GENERATION_ID"]
-assert pointer["relative_directory"] == "generation-" + pointer["generation_id"]
-assert pointer["anchor_sha"] == os.environ["PHASE_01_PUBLISHED_ANCHOR_SHA"]
-assert pointer["anchor_tree"] == os.environ["PHASE_01_PUBLISHED_ANCHOR_TREE"]
-assert pointer["projection_sha256"] == os.environ["PUBLISHED_ANCHOR_PROJECTION_SHA256"]
-assert pointer["author_inventory_sha256"] == os.environ["PUBLISHED_ANCHOR_AUTHORS_SHA256"]
-assert pointer["reviews_sha256"] == os.environ["PUBLISHED_ANCHOR_REVIEWS_SHA256"]
-material = "".join(
-    pointer[key] + "\n"
-    for key in (
+MAX_CONTROL_BYTES = 16_384
+MAX_SEALED_BYTES = 1_048_576
+HEX40 = re.compile(r"[0-9a-f]{40}\Z")
+HEX64 = re.compile(r"[0-9a-f]{64}\Z")
+AUTHOR_PATH = re.compile(r"/root(?:/[a-z0-9_]+)+\Z")
+RUN_ID = "phase-01-governance-2026-07-14"
+
+
+def fail(detail):
+    raise SystemExit(detail)
+
+
+def require(condition, detail):
+    if not condition:
+        fail(detail)
+
+
+def is_reparse(metadata):
+    flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    attributes = getattr(metadata, "st_file_attributes", 0)
+    return stat.S_ISLNK(metadata.st_mode) or bool(flag and attributes & flag)
+
+
+def signature(metadata):
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        stat.S_IFMT(metadata.st_mode),
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def canonical_directory(raw, label):
+    candidate = Path(raw)
+    require(candidate.is_absolute(), f"{label} is not absolute")
+    resolved = candidate.resolve(strict=True)
+    require(Path(os.path.abspath(candidate)) == resolved, f"{label} is not canonical")
+    metadata = resolved.lstat()
+    require(not is_reparse(metadata), f"{label} is a link or reparse point")
+    require(stat.S_ISDIR(metadata.st_mode), f"{label} is not a directory")
+    return resolved
+
+
+def read_verified(path, maximum, label):
+    descriptor = None
+    try:
+        before = path.lstat()
+        require(not is_reparse(before), f"{label} is a link or reparse point")
+        require(stat.S_ISREG(before.st_mode), f"{label} is not regular")
+        require(0 < before.st_size <= maximum, f"{label} has invalid size")
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        require(bool(nofollow), f"{label} no-follow open is unavailable")
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOINHERIT", 0)
+            | nofollow
+            | getattr(os, "O_NONBLOCK", 0)
+        )
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        require(signature(opened) == signature(before), f"{label} identity changed")
+        chunks = bytearray()
+        while len(chunks) <= maximum:
+            chunk = os.read(descriptor, min(65_536, maximum + 1 - len(chunks)))
+            if not chunk:
+                break
+            chunks.extend(chunk)
+        require(len(chunks) <= maximum, f"{label} exceeds byte limit")
+        after_descriptor = os.fstat(descriptor)
+        after_path = path.lstat()
+        require(signature(after_descriptor) == signature(opened), f"{label} mutated")
+        require(signature(after_path) == signature(opened), f"{label} path changed")
+        return bytes(chunks)
+    except OSError:
+        fail(f"{label} could not be captured")
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def parse_canonical(raw, label):
+    require(raw.endswith(b"\n") and not raw.endswith(b"\n\n"), f"{label} newline")
+
+    def closed_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                fail(f"duplicate {label} key")
+            result[key] = value
+        return result
+
+    def reject_number(_value):
+        fail(f"{label} contains a forbidden number")
+
+    try:
+        value = json.loads(
+            raw[:-1].decode("utf-8", "strict"),
+            object_pairs_hook=closed_pairs,
+            parse_float=reject_number,
+            parse_constant=reject_number,
+        )
+        canonical = json.dumps(
+            value,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8") + b"\n"
+    except (TypeError, UnicodeError, ValueError):
+        fail(f"{label} is invalid JSON")
+    require(raw == canonical, f"{label} is not canonical")
+    require(isinstance(value, dict), f"{label} root is not an object")
+    return value
+
+
+def value_matches(mapping, key, expected):
+    return type(mapping.get(key)) is type(expected) and mapping.get(key) == expected
+
+
+def main(arguments):
+    require(len(arguments) == 13, "invalid acceptance arguments")
+    (
+        parent_raw,
+        generation_raw,
+        dispatch_root_raw,
+        generation_id,
+        parent_identity,
+        pointer_digest,
+        projection_digest,
+        authors_digest,
+        reviews_digest,
+        dispatch_digest,
+        anchor_sha,
+        anchor_tree,
+        author_task_path,
+    ) = arguments
+    for digest in (
+        generation_id,
+        parent_identity,
+        pointer_digest,
+        projection_digest,
+        authors_digest,
+        reviews_digest,
+        dispatch_digest,
+    ):
+        require(isinstance(digest, str) and HEX64.fullmatch(digest), "invalid digest")
+    require(HEX40.fullmatch(anchor_sha) is not None, "invalid anchor SHA")
+    require(HEX40.fullmatch(anchor_tree) is not None, "invalid anchor tree")
+    require(AUTHOR_PATH.fullmatch(author_task_path) is not None, "invalid author path")
+
+    parent = canonical_directory(parent_raw, "evidence parent")
+    generation = canonical_directory(generation_raw, "evidence generation")
+    dispatch_root = canonical_directory(dispatch_root_raw, "dispatch root")
+    require(generation == parent / f"generation-{generation_id}", "wrong generation")
+    require(
+        dispatch_root != parent
+        and parent not in dispatch_root.parents
+        and dispatch_root not in parent.parents,
+        "dispatch root is not separate",
+    )
+    canonical_parent = os.path.normcase(os.path.normpath(str(parent)))
+    observed_parent_identity = hashlib.sha256(
+        (canonical_parent + "\n").encode("utf-8")
+    ).hexdigest()
+    require(observed_parent_identity == parent_identity, "evidence parent moved")
+
+    raw_worktrees = subprocess.check_output(
+        ["git", "worktree", "list", "--porcelain", "-z"]
+    )
+    worktrees = [
+        Path(item[9:].decode("utf-8", "strict")).resolve(strict=True)
+        for item in raw_worktrees.split(b"\0")
+        if item.startswith(b"worktree ")
+    ]
+    common = Path(
+        subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            text=True,
+        ).strip()
+    ).resolve(strict=True)
+    require(bool(worktrees), "worktree inventory is empty")
+    for external in (parent, generation, dispatch_root):
+        for repository_path in (*worktrees, common):
+            require(
+                external != repository_path
+                and repository_path not in external.parents
+                and external not in repository_path.parents,
+                "external evidence overlaps a repository",
+            )
+
+    expected_entries = [
+        "author-inventory.json",
+        "published-anchor-projection.json",
+        "published-anchor-reviews.json",
+    ]
+    require(
+        sorted(path.name for path in generation.iterdir()) == expected_entries,
+        "generation file set differs",
+    )
+
+    pointer_raw = read_verified(parent / "live-generation.json", MAX_CONTROL_BYTES, "pointer")
+    require(hashlib.sha256(pointer_raw).hexdigest() == pointer_digest, "pointer digest")
+    pointer = parse_canonical(pointer_raw, "pointer")
+    pointer_keys = {
+        "schema_version",
+        "run_id",
+        "generation_id",
+        "relative_directory",
+        "anchor_sha",
+        "anchor_tree",
+        "evidence_parent_identity",
         "projection_sha256",
         "author_inventory_sha256",
         "reviews_sha256",
+    }
+    require(set(pointer) == pointer_keys, "pointer keys differ")
+    pointer_expected = {
+        "schema_version": "published-anchor-live-pointer/v1",
+        "run_id": RUN_ID,
+        "generation_id": generation_id,
+        "relative_directory": f"generation-{generation_id}",
+        "anchor_sha": anchor_sha,
+        "anchor_tree": anchor_tree,
+        "evidence_parent_identity": parent_identity,
+        "projection_sha256": projection_digest,
+        "author_inventory_sha256": authors_digest,
+        "reviews_sha256": reviews_digest,
+    }
+    require(pointer == pointer_expected, "pointer values differ")
+
+    sealed = {}
+    for name, expected_digest in (
+        ("published-anchor-projection.json", projection_digest),
+        ("author-inventory.json", authors_digest),
+        ("published-anchor-reviews.json", reviews_digest),
+    ):
+        captured = read_verified(generation / name, MAX_SEALED_BYTES, name)
+        require(hashlib.sha256(captured).hexdigest() == expected_digest, f"{name} digest")
+        sealed[name] = parse_canonical(captured, name)
+    projection = sealed["published-anchor-projection.json"]
+    authors = sealed["author-inventory.json"]
+    reviews = sealed["published-anchor-reviews.json"]
+    require(value_matches(projection, "run_id", RUN_ID), "projection run")
+    require(value_matches(projection, "head_sha", anchor_sha), "projection anchor")
+    require(value_matches(projection, "head_tree_sha", anchor_tree), "projection tree")
+    require(value_matches(authors, "run_id", RUN_ID), "authors run")
+    require(value_matches(reviews, "run_id", RUN_ID), "reviews run")
+    require(value_matches(reviews, "anchor_sha", anchor_sha), "reviews anchor")
+    require(value_matches(reviews, "anchor_tree", anchor_tree), "reviews tree")
+
+    generation_material = "".join(
+        digest + "\n" for digest in (projection_digest, authors_digest, reviews_digest)
+    ).encode("ascii")
+    require(
+        hashlib.sha256(generation_material).hexdigest() == generation_id,
+        "generation identity differs",
     )
-).encode("ascii")
-assert hashlib.sha256(material).hexdigest() == pointer["generation_id"]
-assert sorted(path.name for path in generation.iterdir()) == [
-    "author-inventory.json",
-    "published-anchor-projection.json",
-    "published-anchor-reviews.json",
-]
-dispatch = parent / f"task-00-dispatch-{pointer['generation_id']}.json"
-assert dispatch.is_file()
+
+    dispatch_path = dispatch_root / f"task-00-dispatch-{generation_id}.json"
+    dispatch_raw = read_verified(dispatch_path, MAX_CONTROL_BYTES, "dispatch file")
+    require(hashlib.sha256(dispatch_raw).hexdigest() == dispatch_digest, "dispatch digest")
+    dispatch = parse_canonical(dispatch_raw, "dispatch")
+    dispatch_keys = {
+        "schema_version",
+        "task_id",
+        "generation_id",
+        "evidence_parent_identity",
+        "live_pointer_sha256",
+        "projection_sha256",
+        "author_inventory_sha256",
+        "reviews_sha256",
+        "anchor_sha",
+        "anchor_tree",
+        "author_task_path",
+        "dispatched_at",
+    }
+    require(set(dispatch) == dispatch_keys, "dispatch keys differ")
+    dispatch_expected = {
+        "schema_version": "task-dispatch/v1",
+        "task_id": 0,
+        "generation_id": generation_id,
+        "evidence_parent_identity": parent_identity,
+        "live_pointer_sha256": pointer_digest,
+        "projection_sha256": projection_digest,
+        "author_inventory_sha256": authors_digest,
+        "reviews_sha256": reviews_digest,
+        "anchor_sha": anchor_sha,
+        "anchor_tree": anchor_tree,
+        "author_task_path": author_task_path,
+    }
+    for key, expected in dispatch_expected.items():
+        require(value_matches(dispatch, key, expected), f"dispatch {key} differs")
+    dispatched_at = dispatch.get("dispatched_at")
+    require(isinstance(dispatched_at, str), "dispatch time type")
+    try:
+        dispatched = datetime.strptime(dispatched_at, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError:
+        fail("dispatch time grammar")
+    now = datetime.now(timezone.utc)
+    require(dispatched <= now, "dispatch is in the future")
+    require(now - dispatched <= timedelta(minutes=15), "dispatch is stale")
+
+
+try:
+    main(sys.argv[1:])
+except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
+    fail("Task 0 acceptance failed")
 PY
-python -c 'import os,pathlib,subprocess; e=pathlib.Path(os.environ["PHASE_01_EXTERNAL_EVIDENCE_ROOT"]).resolve(strict=True); raw=subprocess.check_output(["git","worktree","list","--porcelain","-z"]); roots=[pathlib.Path(x[9:].decode("utf-8","strict")).resolve(strict=True) for x in raw.split(b"\0") if x.startswith(b"worktree ")]; common=pathlib.Path(subprocess.check_output(["git","rev-parse","--path-format=absolute","--git-common-dir"],text=True).strip()).resolve(strict=True); assert roots and all(e != root and root not in e.parents for root in roots); assert e != common and common not in e.parents'
-test "$(sha256sum "$EVIDENCE_ROOT/published-anchor-projection.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_PROJECTION_SHA256"
-test "$(sha256sum "$EVIDENCE_ROOT/author-inventory.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_AUTHORS_SHA256"
-test "$(sha256sum "$EVIDENCE_ROOT/published-anchor-reviews.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_REVIEWS_SHA256"
 test "$(git rev-parse HEAD)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
 test "$(git rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
 test -z "$(git status --porcelain=v1)"
 ```
 
-An absent in-memory checkpoint, changed digest, or changed identity is not
-recoverable from repository text: rerun Task -1 capture and both reviews.
+An absent in-memory checkpoint, changed digest, stale dispatch, or changed
+identity is not recoverable from repository text: rerun Task -1 capture and
+both reviews. `docs/audits/2026-07-14-governance-oracle-review.md` records the
+accepted `PUBLISHED_TASK_00_DISPATCH_SHA256`, and every Task 0 review/evidence
+record binds that digest with the three checkpoint digests.
 
 - [ ] **Step 1: Write and prove the RED oracle validator**
 
