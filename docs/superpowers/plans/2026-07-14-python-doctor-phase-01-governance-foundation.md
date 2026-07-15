@@ -744,7 +744,7 @@ keys: `schema_version`, `purpose`, `run_id`, `repository_id`, `repository`,
 `head_parent_sha`, `head_tree_sha`, `commit_url`,
 `contract_introduction_sha`, `contract_introduction_tree_sha`,
 `contract_introduction_blob_sha`, `captured_at`,
-`changed_file_count`, `head_commit_object_sha256`,
+`changed_file_count`, `task_minus_one_commit_chain`, `head_commit_object_sha256`,
 `head_tree_object_sha256`, `contract_introduction_commit_object_sha256`,
 `contract_introduction_tree_object_sha256`,
 `governance_base_commit_object_sha256`,
@@ -793,11 +793,18 @@ fixed values; refs contain only the stated ASCII strings. Capture time comes
 from the orchestration host UTC clock and is informational, not an authority or
 freshness proof.
 
+`task_minus_one_commit_chain` is an ordered array of lowercase 40-hex commit
+IDs from `contract_introduction_sha` through `head_sha`, inclusive. It contains
+at least two unique entries, its first/last entries equal those projected SHAs,
+and every entry's sole parent is the preceding entry (the introduction parent
+is `base_sha`). Every post-introduction commit changes only this plan and leaves
+the projected contract blob unchanged.
+
 Projection validation additionally requires `base_sha` to equal the contract's
 `governance_base_commit`, that commit's tree to equal
 `governance_base_tree`, and `head_sha` to equal both the connector PR head and
 the connector-fetched commit. `head_parent_sha` is its sole parent and equals
-`contract_introduction_sha`; that introduction SHA is the unique contract-path
+the penultimate commit-chain entry; the introduction SHA is the unique contract-path
 addition commit, its parent is `base_sha`, its tree is the projected
 introduction tree, and its contract blob parses to exactly the historical
 five-key bootstrap contract. The final head contains that same contract blob.
@@ -811,11 +818,12 @@ serializer are forbidden. `projection_sha256` is the SHA-256 of those canonical
 bytes and is stored outside the subject commit. The remote head commit, not the
 movable branch name or mutable PR prose, is `PHASE_01_PUBLISHED_ANCHOR_SHA`.
 
-The amendment that defines this procedure is intentionally a second reviewed
-Task -1 commit. `CONTRACT_INTRODUCTION_SHA` remains the unique earlier commit
-that added the five-field contract and whose parent is `GOVERNANCE_BASE_SHA`;
-the final published anchor must descend from it and may not alter the contract's
-immutable projection.
+The reviewed amendments that define and clarify this procedure are ordered
+post-introduction Task -1 commits. `CONTRACT_INTRODUCTION_SHA` remains the
+unique earlier commit that added the five-field contract and whose parent is
+`GOVERNANCE_BASE_SHA`; the final published anchor must descend linearly from it,
+every later Task -1 commit may change only this plan, and none may alter the
+contract's immutable projection.
 
 After publication, run the following exact handoff from the repository's main
 working tree. The authoring worktree must be clean. Preserve its locally
@@ -844,9 +852,18 @@ equivalent. In the execution worktree verify:
 
 ```bash
 set -eu
+export GIT_NO_REPLACE_OBJECTS=1
+test -z "${GIT_ALTERNATE_OBJECT_DIRECTORIES:-}"
+GIT_COMMON_DIR=$(git --no-replace-objects rev-parse --path-format=absolute --git-common-dir)
+test -z "$(git --no-replace-objects for-each-ref --format='%(refname)' refs/replace)"
+test ! -s "$GIT_COMMON_DIR/info/grafts"
+test ! -s "$GIT_COMMON_DIR/objects/info/alternates"
+test ! -s "$GIT_COMMON_DIR/shallow"
+test "$(git --no-replace-objects rev-parse --is-shallow-repository)" = "false"
 test -n "${PHASE_01_PUBLISHED_ANCHOR_SHA:-}"
 test -n "${PHASE_01_PUBLISHED_ANCHOR_TREE:-}"
 test -n "${PHASE_01_PUBLISHED_ANCHOR_PARENT:-}"
+test -n "${PHASE_01_TASK_MINUS_ONE_CHAIN:-}"
 test -n "${GOVERNANCE_BASE_SHA:-}"
 test -n "${CONTRACT_INTRODUCTION_SHA:-}"
 test -n "${CONTRACT_INTRODUCTION_TREE:-}"
@@ -857,7 +874,6 @@ test "$(git rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
 test "$(git rev-parse refs/remotes/origin/agent/phase-01-governance)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
 test "$(git rev-parse 'HEAD^{tree}')" = "$PHASE_01_PUBLISHED_ANCHOR_TREE"
 test "$(git rev-parse 'HEAD^')" = "$PHASE_01_PUBLISHED_ANCHOR_PARENT"
-test "$PHASE_01_PUBLISHED_ANCHOR_PARENT" = "$CONTRACT_INTRODUCTION_SHA"
 test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 2
 test "$(git merge-base "$GOVERNANCE_BASE_SHA" HEAD)" = "$GOVERNANCE_BASE_SHA"
 test "$(git rev-parse "$CONTRACT_INTRODUCTION_SHA^")" = "$GOVERNANCE_BASE_SHA"
@@ -865,13 +881,25 @@ test "$(git rev-parse "$CONTRACT_INTRODUCTION_SHA^{tree}")" = "$CONTRACT_INTRODU
 test "$(git rev-parse "$CONTRACT_INTRODUCTION_SHA:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
 test "$(git rev-parse "HEAD:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
 git merge-base --is-ancestor "$CONTRACT_INTRODUCTION_SHA" HEAD
+test "$(git rev-list --reverse "$CONTRACT_INTRODUCTION_SHA^..HEAD")" = "$PHASE_01_TASK_MINUS_ONE_CHAIN"
 test "$(git diff-tree --no-commit-id --name-only -r "$CONTRACT_INTRODUCTION_SHA" | wc -l)" -eq 2
 git diff-tree --no-commit-id --name-only -r "$CONTRACT_INTRODUCTION_SHA" | grep -Fx "docs/evidence/contracts/phase-01-governance.toml"
 git diff-tree --no-commit-id --name-only -r "$CONTRACT_INTRODUCTION_SHA" | grep -Fx "docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"
-test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = "docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"
+for TASK_MINUS_ONE_COMMIT in $(git rev-list --reverse "$CONTRACT_INTRODUCTION_SHA..HEAD"); do
+  test "$(git rev-list --parents -n 1 "$TASK_MINUS_ONE_COMMIT" | wc -w)" -eq 2
+  test "$(git diff-tree --no-commit-id --name-only -r "$TASK_MINUS_ONE_COMMIT")" = "docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"
+  test "$(git rev-parse "$TASK_MINUS_ONE_COMMIT:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+done
 test -z "$(git submodule status)"
 test -z "$(git status --porcelain=v1)"
 ```
+
+`PHASE_01_TASK_MINUS_ONE_CHAIN` is the projection array joined with LF and no
+final LF. Every Git ancestry, parent, tree, diff, blob, and object-hash query in
+capture/review runs with replacement objects disabled. A replace ref, graft,
+shallow boundary, object alternate, or chain mismatch is `FAIL`; reviewers do
+not accept a normal Git query as a substitute for the replacement-disabled
+result.
 
 The orchestrator supplies those variables from the canonical projection, not
 from repository text. `PHASE_01_EXTERNAL_EVIDENCE_ROOT` is an absolute,
@@ -890,9 +918,14 @@ For `local`, `actor_id` is a collaboration task path, `operation` is one of
 SHA-256 file digest or 40-hex Git tree/commit ID per event. For `github`,
 `actor_id` is exactly `60398680`, `operation` is one of `create_blob`,
 `create_tree`, `create_commit`, or `update_ref`, and input/result identities are
-one lowercase Git object/ref-target SHA per event. Multiple results require
-multiple chronological events; no arrays, nested objects, empty strings, or
-unlisted values are accepted. It uses the same
+one lowercase Git object/ref-target SHA per event. A local `apply_patch` event
+is explicitly a logical authoring batch: it starts at one stable reviewed
+file/tree identity and ends at the next stable reviewed file/tree identity.
+Intermediate uncommitted edit states are not review subjects, are not assigned
+invented identities, and do not become separate events; the batch's sole author
+task remains fully disclosed in `author_task_paths`. Multiple stable reviewed
+results or multiple GitHub API results require multiple chronological events;
+no arrays, nested objects, empty strings, or unlisted values are accepted. It uses the same
 canonical bytes and its SHA-256 is bound by the review transcript. Two distinct
 review agents independently compare the projection with the fresh local Git
 objects, contract, and author inventory.
