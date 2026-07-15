@@ -1221,7 +1221,7 @@ test -n "${GOVERNANCE_BASE_SHA:-}"
 test -n "${CONTRACT_INTRODUCTION_SHA:-}"
 test -n "${CONTRACT_INTRODUCTION_TREE:-}"
 test -n "${CONTRACT_INTRODUCTION_BLOB:-}"
-env -i PATH="$PATH" LC_ALL=C.UTF-8 python -I -B - \
+env -i PATH="$PATH" LC_ALL=C.UTF-8 python -I -B -X utf8 - \
   "$PHASE_01_EXTERNAL_EVIDENCE_PARENT" \
   "$PHASE_01_EXTERNAL_EVIDENCE_ROOT" \
   "$PHASE_01_TASK_DISPATCH_ROOT" \
@@ -1660,34 +1660,77 @@ oracle failure.
 The validator has no third-party TOML dependency. CPython 3.11–3.14 use
 `tomllib` as the authoritative parser and also exercise the embedded fallback
 directly. CPython 3.9 and 3.10 do not provide `tomllib`; those cells honestly
-exercise the fallback only and make no native-parser parity claim. The fallback
-accepts only the closed subset needed by the three oracle fixtures: bare keys,
-single-line basic and literal strings, decimal integers, booleans, arrays,
-inline tables, and array-of-table headers. Every accepted document must also be
-valid TOML 1.0; syntax outside that subset fails closed rather than being
-silently reinterpreted.
+exercise the fallback only and make no native-parser parity claim. This is not
+a general TOML reader. It accepts only the following reviewed grammar used by
+the six frozen fixtures; any unspecified syntax fails closed:
 
-Before recognizing or removing any comment, the fallback validates the entire
-decoded input and rejects TOML-forbidden raw control characters. It accepts
-line endings only as LF or CRLF, rejects a bare CR, and rejects Unicode NEL and
-line/paragraph separators U+0085, U+2028, and U+2029. Comment recognition is
-token aware: `#` inside either string form is data, while a comment outside a
-string ends only at an accepted line ending. Literal strings receive their own
-strict state handling; unterminated literals, quote-tail ambiguity, and a raw
-line ending in a single-line literal are controlled `invalid-toml` failures.
-No preprocessing step may turn malformed input into an accepted document.
+- The three ID fixtures are terminal-newline-terminated ASCII, with exactly one
+  nonempty ID per line and no whitespace or comment syntax. Requirement IDs are
+  `[A-Z][A-Z0-9]*-[0-9]{2}`; skill IDs are lowercase alphanumeric hyphen tokens;
+  specifically `[a-z0-9]+(?:-[a-z0-9]+)*`; profile IDs use that same token
+  grammar with the exact `profile-` prefix.
+- TOML documents use bare ASCII keys only. The provenance top level has exactly
+  `schema_version`, `required_record_fields`, and `source_ids`. The clause top
+  level has exactly `schema_version`, `normalization`, `hash_domain`, and
+  repeated `[[clauses]]` records whose keys are exactly `clause_id`, `path`,
+  `section`, `sha256`, `assertion_kind`, and `requirement_ids`. The check top
+  level has exactly `schema_version`, `order`, `truth_criteria_registry`,
+  `artifact_class_registry`, `state_truth`, `externally_blockable_check_ids`,
+  and repeated `[[checks]]` records whose keys are exactly `check_id`, `gate_id`,
+  `required`, `scheduled_phase`, `schedule_state`, `requirement_ids`,
+  `clause_ids`, `truth_criteria`, and `expected_artifact_classes`.
+- Values are single-line unescaped double-quoted strings, nonempty single-line
+  arrays of those strings, lowercase `true`/`false`, or canonical unsigned
+  decimal integers matching `0|[1-9][0-9]{0,9}` and not exceeding 2,147,483,647.
+  String payloads admit printable ASCII except `"` and `\\`, plus U+2014 only;
+  that single reviewed non-ASCII scalar is required by the clause section names.
+  The sole inline-table form is `state_truth`: exactly the bare keys `PASS`,
+  `NOT_APPLICABLE`, and `BLOCKED`, each mapped to a permitted string array.
+- Every one of the six fixtures accepts either LF or CRLF consistently and ends
+  with exactly one such line ending; a mixed-ending file is rejected. TOML
+  nonblank lines have no leading or trailing horizontal whitespace. Assignments
+  use exactly one U+0020 on each side of `=`, array and inline-table elements use
+  exactly comma-plus-U+0020 separators, and the two array-table headers contain
+  no whitespace. Blank lines are the only otherwise empty TOML lines.
+- A top-level key is unique in its document, a record key is unique within its
+  current array-table record, and an inline-table key is unique within that
+  table. Each exact `[[clauses]]` or `[[checks]]` header starts a new record.
+  Cross-record reuse of record-field names is the only duplicate-key reuse.
+  Regular tables, nested/dotted/quoted keys, literal or multiline strings,
+  escapes, signed/base-prefixed/underscored integers, floats, dates, null-like
+  values, heterogeneous/nested arrays, trailing commas, and comments are not
+  part of the grammar and are rejected even when a broader TOML parser could
+  accept a particular form.
 
-The RED/GREEN corpus includes valid LF and CRLF documents; forbidden controls
-before and after `#`; bare CR and each rejected Unicode separator; `#`, brackets,
-commas, and equals signs inside both string forms; malformed and unterminated
-literal strings; duplicate keys; malformed arrays, inline tables, and
-array-of-table headers; and trailing-token cases. On CPython 3.11–3.14 every
-valid corpus item must produce structurally equal native/fallback values and
-every invalid item must be rejected by both. The 3.9/3.10 cells must return the
-same frozen fallback dispositions for that corpus even though a native
-comparison is unavailable there.
+Every fallback-accepted TOML document is consequently valid TOML 1.0, but the
+converse is intentionally false. Schema validation after parsing still enforces
+the exact key sets, record counts, ordering, and semantic inventory equality.
 
-Run: `PYTHONPATH=src:. python -m unittest tests.test_governance_oracles -v`
+Before classifying or rejecting any comment marker, the fallback validates the
+entire decoded input and rejects TOML-forbidden raw control characters. It
+accepts line endings only as LF or CRLF, rejects a bare CR, and rejects Unicode
+NEL and line/paragraph separators U+0085, U+2028, and U+2029. An unquoted `#`
+is then rejected because this fixture grammar has no comments; `#` inside an
+otherwise permitted basic string is data. No comment stripping or other
+preprocessing step may turn malformed input into an accepted document.
+
+The frozen differential corpus has three explicit outcome classes. Shared-valid
+cases include all three TOML fixtures under LF and CRLF plus minimal examples of
+each permitted scalar/container; on CPython 3.11–3.14 native and fallback values
+must be structurally equal. Invalid-TOML cases include every forbidden raw
+control before and after `#`, bare CR, U+0085/U+2028/U+2029, malformed and
+unterminated literal strings (`'unterminated`, a raw newline before the closing
+quote, and surplus tokens after a closing quote), duplicate keys in each scope,
+malformed arrays/inline tables/array-table headers, and trailing tokens; native
+and fallback must both reject them. Native-valid-but-unsupported cases include
+a valid literal string, escaped basic string, comment, dotted/quoted key,
+regular table, signed or underscored integer, and multiline string; native must
+accept and fallback must reject, proving the boundary is deliberate. CPython
+3.9/3.10 freeze the fallback outcome for every named corpus case without
+claiming an unavailable native comparison.
+
+Run the isolated local harness specified in Step 3. In the RED state it must
+exit with the full-module test failure code, never a startup-controlled zero.
 
 - [ ] **Step 2: Assign independent specification authors**
 
@@ -1711,6 +1754,37 @@ native junction test is conditionally defined only when
 junction fixture fails the test. The simulated reparse test remains registered
 on every platform. A source regression asserts that the module contains no
 runtime skip call or unittest skip decorator.
+
+Every workflow and local-gate Python process starts as
+`python -I -B -X utf8`; neither command nor workflow environment sets
+`PYTHONPATH`. The inline runner imports its trusted standard-library bootstrap
+before resolving the checkout, rejects a checkout path already present on the
+isolated startup path, then registers a closed finder for only `tests`,
+`scripts`, and `python_doctor` at explicit resolved repository roots. Repository
+paths are never added to `sys.path`; ordinary resolution remains confined to
+the captured trusted interpreter paths, while only the three allowlisted
+top-level packages use the explicit finder. A repository `sitecustomize.py`,
+`usercustomize.py`, `unittest.py`, or any other allowed or unapproved top-level
+shadow file therefore cannot control startup or ordinary imports. The workflow
+runner executes both exact mandatory tests, the exact full module, and the
+standalone validator with distinct nonzero failure codes. The local runner
+always executes the simulated test and additionally executes the native
+junction test when and only when it is registered on Windows, then runs the
+same full module and validator.
+
+Tests parse every shell line in the exact workflow and fail if any Python
+invocation lacks all four tokens `python -I -B -X utf8`, if `PYTHONPATH` occurs
+anywhere in the workflow, if an unapproved project import is added to the
+finder, if any repository path is added to `sys.path`, or if a repository path
+precedes the trusted startup paths. A hostile startup regression copies the
+fixture subject, places exit-zero
+`sitecustomize.py`, `usercustomize.py`, and `unittest.py` traps in both checkout
+root and `src`, adds an unapproved top-level module, substitutes sentinel failing
+oracle tests and validator exceptions/`SystemExit`, and runs the extracted
+inline harness. It proves the unapproved module is unimportable and checks the
+expected `20`/`21`/`30`/`40` codes and sentinel markers. Neither startup hooks,
+stdlib shadow names, an unknown repository module, nor an escaping validator
+can bypass or select the gate's status.
 
 Create `.github/workflows/governance-oracles-windows.yml` exactly as follows.
 The two action revisions are the verified official `actions/checkout` v7.0.0
@@ -1762,12 +1836,62 @@ jobs:
           check-latest: false
       - name: Run mandatory native, simulated, and full oracle tests
         shell: pwsh
-        env:
-          PYTHONPATH: "src;."
         run: |
           @'
+          import importlib
+          import importlib.abc
+          import importlib.machinery
+          import pathlib
           import sys
           import unittest
+
+          def stop(code: int) -> None:
+              raise SystemExit(code)
+
+          def within(candidate: pathlib.Path, parent: pathlib.Path) -> bool:
+              return candidate == parent or parent in candidate.parents
+
+          if len(sys.argv) != 2:
+              stop(90)
+          try:
+              root = pathlib.Path(sys.argv[1]).resolve(strict=True)
+              source = (root / "src").resolve(strict=True)
+              current = pathlib.Path.cwd().resolve(strict=True)
+          except (OSError, RuntimeError):
+              stop(91)
+          if current != root or not root.is_dir() or not source.is_dir():
+              stop(92)
+          trusted_path = tuple(sys.path)
+          try:
+              observed = tuple(
+                  pathlib.Path(item).resolve(strict=False)
+                  for item in trusted_path
+                  if item
+              )
+          except (OSError, RuntimeError):
+              stop(93)
+          if any(within(item, root) for item in observed):
+              stop(94)
+          for module in (importlib, pathlib, unittest):
+              origin = getattr(module, "__file__", None)
+              if origin and within(pathlib.Path(origin).resolve(strict=True), root):
+                  stop(95)
+
+          class ReviewedProjectFinder(importlib.abc.MetaPathFinder):
+              roots = {
+                  "tests": (str(root),),
+                  "scripts": (str(root),),
+                  "python_doctor": (str(source),),
+              }
+
+              def find_spec(self, fullname, path=None, target=None):
+                  top_level = fullname.partition(".")[0]
+                  if top_level not in self.roots:
+                      return None
+                  search = list(path) if path is not None else list(self.roots[top_level])
+                  return importlib.machinery.PathFinder.find_spec(fullname, search)
+
+          sys.meta_path.insert(0, ReviewedProjectFinder())
 
           required = (
               "tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip",
@@ -1775,25 +1899,136 @@ jobs:
           )
 
           def run_zero_skip(name: str, expected_count=None) -> bool:
-              suite = unittest.defaultTestLoader.loadTestsFromName(name)
-              if expected_count is not None and suite.countTestCases() != expected_count:
+              try:
+                  suite = unittest.defaultTestLoader.loadTestsFromName(name)
+                  if expected_count is not None and suite.countTestCases() != expected_count:
+                      return False
+                  result = unittest.TextTestRunner(verbosity=2).run(suite)
+              except BaseException:
                   return False
-              result = unittest.TextTestRunner(verbosity=2).run(suite)
               skip_count = len(result.skipped)
               return result.wasSuccessful() and skip_count == 0
 
-          required_results = tuple(run_zero_skip(name, 1) for name in required)
-          success = all(required_results)
-          success = run_zero_skip("tests.test_governance_oracles") and success
-          raise SystemExit(0 if success else 1)
-          '@ | python -
+          for offset, name in enumerate(required):
+              if not run_zero_skip(name, 1):
+                  stop(20 + offset)
+          if not run_zero_skip("tests.test_governance_oracles"):
+              stop(30)
+          try:
+              from scripts.governance import validate_oracles
+              validator_status = validate_oracles.main((str(root),))
+          except BaseException:
+              stop(40)
+          if type(validator_status) is not int or validator_status != 0:
+              stop(40)
+          stop(0)
+          '@ | python -I -B -X utf8 - "$env:GITHUB_WORKSPACE"
+          exit $LASTEXITCODE
 ```
 
 Run the local zero-skip gate and commit these exact files before Task 1.
 
 ```bash
-PYTHONPATH=src:. python -m unittest tests.test_governance_oracles -v
-python -c 'import sys,unittest; suite=unittest.defaultTestLoader.loadTestsFromName("tests.test_governance_oracles"); result=unittest.TextTestRunner(verbosity=2).run(suite); skip_count=len(result.skipped); raise SystemExit(0 if result.wasSuccessful() and skip_count == 0 else 1)'
+python -I -B -X utf8 - "$PWD" <<'PY'
+import importlib
+import importlib.abc
+import importlib.machinery
+import pathlib
+import sys
+import unittest
+
+
+def stop(code):
+    raise SystemExit(code)
+
+
+def within(candidate, parent):
+    return candidate == parent or parent in candidate.parents
+
+
+if len(sys.argv) != 2:
+    stop(90)
+try:
+    root = pathlib.Path(sys.argv[1]).resolve(strict=True)
+    source = (root / "src").resolve(strict=True)
+    current = pathlib.Path.cwd().resolve(strict=True)
+except (OSError, RuntimeError):
+    stop(91)
+if current != root or not root.is_dir() or not source.is_dir():
+    stop(92)
+trusted_path = tuple(sys.path)
+try:
+    observed = tuple(
+        pathlib.Path(item).resolve(strict=False) for item in trusted_path if item
+    )
+except (OSError, RuntimeError):
+    stop(93)
+if any(within(item, root) for item in observed):
+    stop(94)
+for module in (importlib, pathlib, unittest):
+    origin = getattr(module, "__file__", None)
+    if origin and within(pathlib.Path(origin).resolve(strict=True), root):
+        stop(95)
+
+
+class ReviewedProjectFinder(importlib.abc.MetaPathFinder):
+    roots = {
+        "tests": (str(root),),
+        "scripts": (str(root),),
+        "python_doctor": (str(source),),
+    }
+
+    def find_spec(self, fullname, path=None, target=None):
+        top_level = fullname.partition(".")[0]
+        if top_level not in self.roots:
+            return None
+        search = list(path) if path is not None else list(self.roots[top_level])
+        return importlib.machinery.PathFinder.find_spec(fullname, search)
+
+
+sys.meta_path.insert(0, ReviewedProjectFinder())
+
+
+def run_zero_skip(name, expected_count=None):
+    try:
+        suite = unittest.defaultTestLoader.loadTestsFromName(name)
+        if expected_count is not None and suite.countTestCases() != expected_count:
+            return False
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
+    except BaseException:
+        return False
+    return result.wasSuccessful() and len(result.skipped) == 0
+
+
+required = [
+    (
+        "tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level",
+        21,
+    ),
+]
+if sys.platform == "win32":
+    required.insert(
+        0,
+        (
+            "tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip",
+            20,
+        ),
+    )
+for name, failure_code in required:
+    if not run_zero_skip(name, 1):
+        stop(failure_code)
+if not run_zero_skip("tests.test_governance_oracles"):
+    stop(30)
+try:
+    from scripts.governance import validate_oracles
+    validator_status = validate_oracles.main((str(root),))
+except BaseException:
+    stop(40)
+if type(validator_status) is not int or validator_status != 0:
+    stop(40)
+stop(0)
+PY
+python -I -B -X utf8 -m compileall -q scripts tests
 git add .github/workflows/governance-oracles-windows.yml scripts/__init__.py scripts/governance/__init__.py scripts/governance/validate_oracles.py tests/test_governance_oracles.py tests/fixtures/governance/expected-requirement-ids.txt tests/fixtures/governance/expected-skill-ids.txt tests/fixtures/governance/expected-profile-domain-ids.txt tests/fixtures/governance/expected-provenance-sources.toml tests/fixtures/governance/expected-gate-clauses.toml tests/fixtures/governance/expected-gate-checks.toml docs/audits/2026-07-14-governance-oracle-review.md
 git diff --cached --name-only
 git commit -m "docs(governance): freeze independent oracle inventories"
