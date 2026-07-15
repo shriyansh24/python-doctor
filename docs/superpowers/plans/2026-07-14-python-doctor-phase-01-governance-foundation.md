@@ -1812,6 +1812,27 @@ module set it must leave loaded; deletion of either a baseline module or a
 required project module is a failure. Loader-class references and source,
 bytecode, and extension suffix tuples are captured before repository import
 and never reread from mutable `importlib` module state afterward.
+The complete class dictionaries of every approved loader/finder class and each
+non-`object` class in their method-resolution orders are identity-frozen and
+rechecked before post-stage import work. This includes `PathFinder`,
+`FileFinder`, built-in/frozen importers, source/bytecode/extension loaders,
+`zipimporter`, and the two project-only loader/finder classes; adding, deleting,
+or replacing even an inherited method fails. Each class's exact `__bases__`
+and `__mro__` tuple objects and every member of the MRO are frozen too, so even
+an equivalent base reassignment fails. Exact loader/finder instances
+retain their version-independent closed attribute shape with no callable
+shadowing. The exact built-in `dict` containers for
+`sys.modules`/`sys.path_importer_cache` and built-in `list` containers for
+`sys.path`/`sys.path_hooks`/`sys.meta_path` are identity-bound. Project loads
+are recorded before repository execution as an exact key/module/spec/loader
+registry. Their stored import attributes, loader-state values, package path
+containers, and every path/search-location string are verified immediately
+after `exec_module` returns and retained by object identity through final stage
+validation. Every
+promised baseline stored import attribute—including presence versus absence,
+spec-less module name, spec origin, module package/cache/path state, spec
+loader/search-location state, and loader name/path/archive/prefix—is likewise
+retained by object identity.
 
 The workflow supervisor launches separate native-test, simulated-test,
 full-module, and validator children; the local supervisor omits the native child
@@ -1848,6 +1869,19 @@ Further cases replace a baseline key with a distinct equal `str`, add an alias
 key for a valid stdlib module, mutate an importlib suffix list before installing
 an injected-suffix `FileFinder`, and mismatch a zip module's declared name from
 the exact `zipimporter.get_filename()` origin; each must fail closed.
+Independent cases shadow `get_code` on an exact `SourceFileLoader` instance,
+mutate a frozen loader class method, reassign the same or different loader
+`__bases__` tuple, replace a project module while reusing its
+spec/loader, substitute `HidingModules`/`HidingCache` dictionary subclasses,
+and replace each import-state list with an equal list; each must fail closed.
+Separate red-green cases use distinct equal objects for baseline `spec.origin`
+and name attributes, replace spec-less-module and loader name/path attributes,
+install `os.PathLike` project name/origin/file/path/search-location values,
+replace a project module with an equivalent object, mutate the exact
+`SourceFileLoader` class or instance, shadow `FileFinder`/`zipimporter`
+callables, and hide entries behind dict/list subclasses. Each regression first
+passes against the intact gate, then fails solely because of its hostile
+mutation; restoring that mutation makes the same gate pass again.
 Separate cases reject a new `None` negative-cache entry and a
 purelib/platlib/user-site or `site-packages`/`dist-packages` finder and payload,
 even when that install root is a descendant of stdlib. A positive portable
@@ -2172,6 +2206,19 @@ jobs:
           required_project_modules = required_project_modules_by_stage.get(stage)
           if required_project_modules is None:
               abort()
+          MODULES_CONTAINER = sys.modules
+          IMPORTER_CACHE_CONTAINER = sys.path_importer_cache
+          PATH_CONTAINER = sys.path
+          PATH_HOOKS_CONTAINER = sys.path_hooks
+          META_PATH_CONTAINER = sys.meta_path
+          if (
+              type(MODULES_CONTAINER) is not dict
+              or type(IMPORTER_CACHE_CONTAINER) is not dict
+              or type(PATH_CONTAINER) is not list
+              or type(PATH_HOOKS_CONTAINER) is not list
+              or type(META_PATH_CONTAINER) is not list
+          ):
+              abort()
           stdlib = pathlib.Path(sysconfig.get_path("stdlib")).resolve(strict=True)
           platstdlib = pathlib.Path(sysconfig.get_path("platstdlib")).resolve(strict=True)
           base = pathlib.Path(sys.base_prefix).resolve(strict=True)
@@ -2235,12 +2282,153 @@ jobs:
               (BYTECODE_LOADER, BYTECODE_SUFFIXES),
               (EXTENSION_LOADER, EXTENSION_SUFFIXES),
           )
+          PATH_FINDER = importlib.machinery.PathFinder
+          SOURCE_EXEC_MODULE = SOURCE_LOADER.exec_module
+          SOURCE_TO_CODE = SOURCE_LOADER.source_to_code
+          PATH_FIND_SPEC = PATH_FINDER.find_spec
+
+          def freeze_class_state(owner):
+              return owner, owner.__bases__, owner.__mro__, tuple(vars(owner).items())
+
+          def verify_class_states(states):
+              for owner, expected_bases, expected_mro, expected in states:
+                  current = tuple(vars(owner).items())
+                  if (
+                      owner.__bases__ is not expected_bases
+                      or owner.__mro__ is not expected_mro
+                      or len(owner.__mro__) != len(expected_mro)
+                      or any(
+                          current_owner is not expected_owner
+                          for current_owner, expected_owner
+                          in zip(owner.__mro__, expected_mro)
+                      )
+                      or len(current) != len(expected)
+                      or any(
+                      current_name is not expected_name or current_value is not expected_value
+                      for (current_name, current_value), (expected_name, expected_value)
+                      in zip(current, expected)
+                      )
+                  ):
+                      abort()
+
+          core_class_owners = []
+          for root_class in (
+              BUILTIN_LOADER,
+              FROZEN_LOADER,
+              PATH_FINDER,
+              FILE_FINDER,
+              SOURCE_LOADER,
+              BYTECODE_LOADER,
+              EXTENSION_LOADER,
+              ZIP_IMPORTER,
+              importlib.abc.MetaPathFinder,
+          ):
+              for owner in root_class.__mro__:
+                  if owner is not object and owner not in core_class_owners:
+                      core_class_owners.append(owner)
+          CORE_CLASS_STATES = tuple(freeze_class_state(owner) for owner in core_class_owners)
+          CALLABLE_CLASS_ATTRIBUTES = frozenset(
+              name
+              for _owner, _bases, _mro, state in CORE_CLASS_STATES
+              for name, value in state
+              if callable(value)
+          )
+
+          MISSING_ATTRIBUTE = object()
+          MODULE_IMPORT_ATTRIBUTES = (
+              "__name__", "__loader__", "__package__", "__spec__",
+              "__path__", "__file__", "__cached__",
+          )
+          SPEC_IMPORT_ATTRIBUTES = (
+              "name", "loader", "origin", "submodule_search_locations",
+              "cached", "has_location",
+          )
+          LOADER_IMPORT_ATTRIBUTES = ("name", "path", "archive", "prefix")
+
+          def read_attribute(subject, name):
+              try:
+                  return True, getattr(subject, name)
+              except AttributeError:
+                  return False, MISSING_ATTRIBUTE
+              except BaseException:
+                  abort()
+
+          def freeze_attributes(subject, names):
+              return tuple((name,) + read_attribute(subject, name) for name in names)
+
+          def verify_attributes(subject, expected):
+              for name, expected_present, expected_value in expected:
+                  present, value = read_attribute(subject, name)
+                  if present is not expected_present or value is not expected_value:
+                      abort()
+
+          def frozen_attribute(expected, name):
+              for attribute_name, present, value in expected:
+                  if attribute_name == name:
+                      return value if present else MISSING_ATTRIBUTE
+              abort()
+
+          def freeze_string_list(value):
+              if type(value) is not list or any(type(item) is not str for item in value):
+                  abort()
+              return value, tuple(value)
+
+          def verify_string_list(value, expected):
+              container, items = expected
+              if value is not container or type(value) is not list or len(value) != len(items):
+                  abort()
+              if any(observed is not frozen for observed, frozen in zip(value, items)):
+                  abort()
+
+          def freeze_package_paths(module, spec):
+              path_present, module_path = read_attribute(module, "__path__")
+              spec_path = None if spec is None else spec.submodule_search_locations
+              if spec_path is None:
+                  if path_present:
+                      abort()
+                  return None, None
+              if not path_present:
+                  abort()
+              module_state = freeze_string_list(module_path)
+              spec_state = freeze_string_list(spec_path)
+              if (
+                  module_state[0] is not spec_state[0]
+                  or len(module_state[1]) != len(spec_state[1])
+                  or any(
+                      module_item is not spec_item
+                      for module_item, spec_item in zip(module_state[1], spec_state[1])
+                  )
+              ):
+                  abort()
+              return module_state, spec_state
+
+          def verify_exact_sequence(value, expected, expected_type):
+              if type(value) is not expected_type or len(value) != len(expected):
+                  abort()
+              if any(observed is not frozen for observed, frozen in zip(value, expected)):
+                  abort()
 
           def importer_fingerprint(key, importer):
               if importer is None:
                   return ("none",)
               if type(importer) is FILE_FINDER:
                   if type(key) is not str or type(importer.path) is not str:
+                      abort()
+                  try:
+                      finder_state = vars(importer)
+                  except TypeError:
+                      abort()
+                  if (
+                      type(finder_state) is not dict
+                      or set(finder_state) != {"path", "_loaders", "_path_mtime", "_path_cache", "_relaxed_path_cache"}
+                      or finder_state.get("path") is not importer.path
+                      or finder_state.get("_loaders") is not importer._loaders
+                      or type(importer._loaders) is not list
+                      or type(finder_state.get("_path_cache")) is not set
+                      or type(finder_state.get("_relaxed_path_cache")) is not set
+                  ):
+                      abort()
+                  if any(name in CALLABLE_CLASS_ATTRIBUTES for name in finder_state):
                       abort()
                   if pathlib.Path(importer.path).resolve(strict=False) != pathlib.Path(key).resolve(strict=False):
                       abort()
@@ -2257,6 +2445,19 @@ jobs:
               if type(importer) is ZIP_IMPORTER:
                   if type(key) is not str or type(importer.archive) is not str or type(importer.prefix) is not str:
                       abort()
+                  try:
+                      zip_state = vars(importer)
+                  except TypeError:
+                      abort()
+                  if (
+                      type(zip_state) is not dict
+                      or set(zip_state) != {"_files", "archive", "prefix"}
+                      or type(zip_state.get("_files")) is not dict
+                      or zip_state.get("archive") is not importer.archive
+                      or zip_state.get("prefix") is not importer.prefix
+                      or any(name in CALLABLE_CLASS_ATTRIBUTES for name in zip_state)
+                  ):
+                      abort()
                   archive = pathlib.Path(importer.archive).resolve(strict=False)
                   prefix = importer.prefix.replace("/", os.sep).replace("\\", os.sep).strip(os.sep)
                   expected_key = archive if not prefix else pathlib.Path(str(archive) + os.sep + prefix)
@@ -2271,6 +2472,7 @@ jobs:
               key: importer_fingerprint(key, importer)
               for key, importer in sys.path_importer_cache.items()
           }
+          project_identities = {}
 
           class ExactLoader(SOURCE_LOADER):
               def __init__(self, fullname, path, digest):
@@ -2279,7 +2481,46 @@ jobs:
 
               def get_code(self, fullname):
                   raw = capture(pathlib.Path(self.path), self.digest)
-                  return self.source_to_code(raw, self.path)
+                  return SOURCE_TO_CODE(self, raw, self.path)
+
+              def exec_module(self, module):
+                  spec = getattr(module, "__spec__", None)
+                  if self.name in project_identities or spec is None or spec.loader is not self:
+                      abort()
+                  matching_keys = tuple(
+                      key
+                      for key, value in sys.modules.items()
+                      if type(key) is str and key == self.name and value is module
+                  )
+                  if len(matching_keys) != 1:
+                      abort()
+                  module_attributes = freeze_attributes(module, MODULE_IMPORT_ATTRIBUTES)
+                  spec_attributes = freeze_attributes(spec, SPEC_IMPORT_ATTRIBUTES)
+                  loader_attributes = freeze_attributes(self, LOADER_IMPORT_ATTRIBUTES + ("digest",))
+                  module_path_state, spec_path_state = freeze_package_paths(module, spec)
+                  project_identities[self.name] = (
+                      matching_keys[0], module, spec, self,
+                      module_attributes, spec_attributes, loader_attributes,
+                      module_path_state, spec_path_state,
+                  )
+                  SOURCE_EXEC_MODULE(self, module)
+                  identity = project_identities.get(self.name)
+                  if (
+                      identity is None
+                      or identity[0] not in sys.modules
+                      or sys.modules[identity[0]] is not module
+                      or getattr(module, "__spec__", None) is not spec
+                      or spec.loader is not self
+                  ):
+                      abort()
+                  verify_attributes(module, module_attributes)
+                  verify_attributes(spec, spec_attributes)
+                  verify_attributes(self, loader_attributes)
+                  if module_path_state is not None:
+                      verify_string_list(module.__path__, module_path_state)
+                      verify_string_list(spec.submodule_search_locations, spec_path_state)
+
+          EXACT_LOADER_METHODS = (ExactLoader.get_code, ExactLoader.exec_module)
 
           class ClosedFinder(importlib.abc.MetaPathFinder):
               prefixes = ("tests", "scripts", "python_doctor")
@@ -2290,6 +2531,8 @@ jobs:
                   if fullname not in modules:
                       raise ModuleNotFoundError("allowlisted module miss")
                   raw_path, package, digest = modules[fullname]
+                  if type(raw_path) is not str or type(package) is not bool or type(digest) is not str:
+                      abort()
                   source_path = pathlib.Path(raw_path)
                   expected_parent = source_path.parent
                   if path is None:
@@ -2299,12 +2542,16 @@ jobs:
                       parent_name = fullname.rpartition(".")[0]
                       if parent_name not in modules:
                           raise ModuleNotFoundError("unreviewed parent package")
+                      parent_identity = project_identities.get(parent_name)
+                      if parent_identity is None or parent_identity[7] is None:
+                          raise ModuleNotFoundError("unregistered parent package")
+                      verify_string_list(path, parent_identity[7])
                       parent_source = pathlib.Path(modules[parent_name][0])
                       supplied = tuple(pathlib.Path(item).resolve(strict=False) for item in path)
                       if supplied != (parent_source.parent,):
                           raise ModuleNotFoundError("redirected package path")
                   capture(source_path, digest)
-                  loader = ExactLoader(fullname, str(source_path), digest)
+                  loader = ExactLoader(fullname, raw_path, digest)
                   spec = importlib.util.spec_from_loader(fullname, loader, is_package=package)
                   if spec is None or pathlib.Path(spec.origin).resolve(strict=False) != source_path:
                       abort()
@@ -2312,7 +2559,17 @@ jobs:
                       abort()
                   return spec
 
+          PROJECT_CLASS_STATES = tuple(
+              freeze_class_state(owner) for owner in (ExactLoader, ClosedFinder)
+          )
+
           finder = ClosedFinder()
+          try:
+              finder_state = vars(finder)
+          except TypeError:
+              abort()
+          if type(finder) is not ClosedFinder or type(finder_state) is not dict or finder_state:
+              abort()
           sys.meta_path.insert(0, finder)
           closed_meta = tuple(sys.meta_path)
           trusted_roots = tuple(
@@ -2407,8 +2664,16 @@ jobs:
               )
               if backend_suffixes is None:
                   abort()
+              try:
+                  loader_state = vars(loader)
+              except TypeError:
+                  abort()
               if (
-                  type(loader.name) is not str
+                  type(loader_state) is not dict
+                  or set(loader_state) != {"name", "path"}
+                  or loader_state.get("name") is not loader.name
+                  or loader_state.get("path") is not loader.path
+                  or type(loader.name) is not str
                   or type(loader.path) is not str
                   or type(spec.origin) is not str
                   or type(module_file) is not str
@@ -2433,14 +2698,18 @@ jobs:
                       getattr(spec, "name", None),
                       getattr(module, "__name__", None),
                   ))
+              loader = getattr(module, "__loader__", None)
+              module_path_state, spec_path_state = freeze_package_paths(module, spec)
               baseline_modules.append((
                   name,
                   module,
                   spec,
-                  getattr(module, "__loader__", None),
-                  getattr(module, "__file__", None),
-                  getattr(spec, "name", None),
-                  getattr(module, "__name__", None),
+                  loader,
+                  freeze_attributes(module, MODULE_IMPORT_ATTRIBUTES),
+                  () if spec is None else freeze_attributes(spec, SPEC_IMPORT_ATTRIBUTES),
+                  () if loader is None else freeze_attributes(loader, LOADER_IMPORT_ATTRIBUTES),
+                  module_path_state,
+                  spec_path_state,
               ))
           baseline_modules = tuple(baseline_modules)
           baseline_key_identities = {id(entry[0]): entry for entry in baseline_modules}
@@ -2448,10 +2717,31 @@ jobs:
               abort()
 
           def verify_import_state():
-              if tuple(sys.path) != closed_path or tuple(sys.path_hooks) != closed_hooks or tuple(sys.meta_path) != closed_meta:
+              if (
+                  sys.modules is not MODULES_CONTAINER or type(sys.modules) is not dict
+                  or sys.path_importer_cache is not IMPORTER_CACHE_CONTAINER or type(sys.path_importer_cache) is not dict
+                  or sys.path is not PATH_CONTAINER or type(sys.path) is not list
+                  or sys.path_hooks is not PATH_HOOKS_CONTAINER or type(sys.path_hooks) is not list
+                  or sys.meta_path is not META_PATH_CONTAINER or type(sys.meta_path) is not list
+              ):
+                  abort()
+              verify_class_states(CORE_CLASS_STATES)
+              verify_class_states(PROJECT_CLASS_STATES)
+              if ExactLoader.get_code is not EXACT_LOADER_METHODS[0] or ExactLoader.exec_module is not EXACT_LOADER_METHODS[1]:
+                  abort()
+              try:
+                  current_finder_state = vars(finder)
+              except TypeError:
+                  abort()
+              if type(finder) is not ClosedFinder or type(current_finder_state) is not dict or current_finder_state:
+                  abort()
+              verify_exact_sequence(sys.path, closed_path, list)
+              verify_exact_sequence(sys.path_hooks, closed_hooks, list)
+              verify_exact_sequence(sys.meta_path, closed_meta, list)
+              if sys.meta_path[0] is not finder:
                   abort()
               for item in closed_path:
-                  importlib.machinery.PathFinder.find_spec(cache_probe, [item])
+                  PATH_FIND_SPEC(cache_probe, [item])
               if not set(closed_importer_cache).issubset(sys.path_importer_cache):
                   abort()
               for key, observed_importer in sys.path_importer_cache.items():
@@ -2468,7 +2758,12 @@ jobs:
                       abort()
                   current_by_key_identity[id(name)] = (name, module)
               for expected in baseline_modules:
-                  expected_name, expected_module, expected_spec, expected_loader, expected_file, expected_spec_name, expected_module_name = expected
+                  (
+                      expected_name, expected_module, expected_spec, expected_loader,
+                      expected_module_attributes, expected_spec_attributes,
+                      expected_loader_attributes, expected_module_path_state,
+                      expected_spec_path_state,
+                  ) = expected
                   observed = current_by_key_identity.get(id(expected_name))
                   if observed is None or observed[0] is not expected_name:
                       abort()
@@ -2477,11 +2772,21 @@ jobs:
                       module is not expected_module
                       or getattr(module, "__spec__", None) is not expected_spec
                       or getattr(module, "__loader__", None) is not expected_loader
-                      or getattr(module, "__file__", None) is not expected_file
                   ):
                       abort()
+                  verify_attributes(module, expected_module_attributes)
                   if expected_spec is not None:
-                      validate_trusted_module(name, module, (expected_spec_name, expected_module_name))
+                      verify_attributes(expected_spec, expected_spec_attributes)
+                  if expected_loader is not None:
+                      verify_attributes(expected_loader, expected_loader_attributes)
+                  if expected_module_path_state is not None:
+                      verify_string_list(module.__path__, expected_module_path_state)
+                      verify_string_list(expected_spec.submodule_search_locations, expected_spec_path_state)
+                  if expected_spec is not None:
+                      validate_trusted_module(name, module, (
+                          frozen_attribute(expected_spec_attributes, "name"),
+                          frozen_attribute(expected_module_attributes, "__name__"),
+                      ))
               observed_project_modules = {
                   name
                   for name in sys.modules
@@ -2503,8 +2808,14 @@ jobs:
                   expected = pathlib.Path(raw_path)
                   spec = getattr(module, "__spec__", None)
                   loader = getattr(module, "__loader__", None)
+                  identity = project_identities.get(name)
                   if (
-                      spec is None
+                      identity is None
+                      or identity[0] is not name
+                      or identity[1] is not module
+                      or identity[2] is not spec
+                      or identity[3] is not loader
+                      or spec is None
                       or type(loader) is not ExactLoader
                       or spec.loader is not loader
                       or type(spec.name) is not str
@@ -2516,6 +2827,29 @@ jobs:
                       or module.__name__ != name
                       or loader.name != name
                       or loader.digest != digest
+                      or loader.path is not raw_path
+                      or loader.digest is not digest
+                      or spec.origin is not loader.path
+                      or module.__file__ is not loader.path
+                      or spec.name is not loader.name
+                      or module.__name__ is not loader.name
+                  ):
+                      abort()
+                  verify_attributes(module, identity[4])
+                  verify_attributes(spec, identity[5])
+                  verify_attributes(loader, identity[6])
+                  try:
+                      loader_state = vars(loader)
+                  except TypeError:
+                      abort()
+                  if (
+                      type(loader_state) is not dict
+                      or set(loader_state) != {"name", "path", "digest"}
+                      or loader_state.get("name") is not loader.name
+                      or loader_state.get("path") is not loader.path
+                      or loader_state.get("digest") is not loader.digest
+                      or type(spec.origin) is not str
+                      or type(module.__file__) is not str
                   ):
                       abort()
                   if pathlib.Path(loader.path).resolve(strict=False) != expected:
@@ -2525,13 +2859,19 @@ jobs:
                   if pathlib.Path(module.__file__).resolve(strict=False) != expected:
                       abort()
                   if package:
-                      locations = tuple(pathlib.Path(item).resolve(strict=False) for item in module.__path__)
+                      if identity[7] is None or identity[8] is None:
+                          abort()
+                      verify_string_list(module.__path__, identity[7])
+                      verify_string_list(spec.submodule_search_locations, identity[8])
+                      raw_locations = identity[7][1]
+                      raw_spec_locations = identity[8][1]
+                      locations = tuple(pathlib.Path(item).resolve(strict=False) for item in raw_locations)
                       if locations != (expected.parent,):
                           abort()
-                      spec_locations = tuple(pathlib.Path(item).resolve(strict=False) for item in spec.submodule_search_locations or ())
+                      spec_locations = tuple(pathlib.Path(item).resolve(strict=False) for item in raw_spec_locations)
                       if spec_locations != (expected.parent,):
                           abort()
-                  elif spec.submodule_search_locations is not None:
+                  elif spec.submodule_search_locations is not None or identity[7] is not None or identity[8] is not None:
                       abort()
                   capture(expected, digest)
 
@@ -2872,6 +3212,19 @@ required_project_modules_by_stage = {
 required_project_modules = required_project_modules_by_stage.get(stage)
 if required_project_modules is None:
     abort()
+MODULES_CONTAINER = sys.modules
+IMPORTER_CACHE_CONTAINER = sys.path_importer_cache
+PATH_CONTAINER = sys.path
+PATH_HOOKS_CONTAINER = sys.path_hooks
+META_PATH_CONTAINER = sys.meta_path
+if (
+    type(MODULES_CONTAINER) is not dict
+    or type(IMPORTER_CACHE_CONTAINER) is not dict
+    or type(PATH_CONTAINER) is not list
+    or type(PATH_HOOKS_CONTAINER) is not list
+    or type(META_PATH_CONTAINER) is not list
+):
+    abort()
 stdlib = pathlib.Path(sysconfig.get_path("stdlib")).resolve(strict=True)
 platstdlib = pathlib.Path(sysconfig.get_path("platstdlib")).resolve(strict=True)
 base = pathlib.Path(sys.base_prefix).resolve(strict=True)
@@ -2935,12 +3288,153 @@ ALLOWED_BACKENDS = (
     (BYTECODE_LOADER, BYTECODE_SUFFIXES),
     (EXTENSION_LOADER, EXTENSION_SUFFIXES),
 )
+PATH_FINDER = importlib.machinery.PathFinder
+SOURCE_EXEC_MODULE = SOURCE_LOADER.exec_module
+SOURCE_TO_CODE = SOURCE_LOADER.source_to_code
+PATH_FIND_SPEC = PATH_FINDER.find_spec
+
+def freeze_class_state(owner):
+    return owner, owner.__bases__, owner.__mro__, tuple(vars(owner).items())
+
+def verify_class_states(states):
+    for owner, expected_bases, expected_mro, expected in states:
+        current = tuple(vars(owner).items())
+        if (
+            owner.__bases__ is not expected_bases
+            or owner.__mro__ is not expected_mro
+            or len(owner.__mro__) != len(expected_mro)
+            or any(
+                current_owner is not expected_owner
+                for current_owner, expected_owner
+                in zip(owner.__mro__, expected_mro)
+            )
+            or len(current) != len(expected)
+            or any(
+            current_name is not expected_name or current_value is not expected_value
+            for (current_name, current_value), (expected_name, expected_value)
+            in zip(current, expected)
+            )
+        ):
+            abort()
+
+core_class_owners = []
+for root_class in (
+    BUILTIN_LOADER,
+    FROZEN_LOADER,
+    PATH_FINDER,
+    FILE_FINDER,
+    SOURCE_LOADER,
+    BYTECODE_LOADER,
+    EXTENSION_LOADER,
+    ZIP_IMPORTER,
+    importlib.abc.MetaPathFinder,
+):
+    for owner in root_class.__mro__:
+        if owner is not object and owner not in core_class_owners:
+            core_class_owners.append(owner)
+CORE_CLASS_STATES = tuple(freeze_class_state(owner) for owner in core_class_owners)
+CALLABLE_CLASS_ATTRIBUTES = frozenset(
+    name
+    for _owner, _bases, _mro, state in CORE_CLASS_STATES
+    for name, value in state
+    if callable(value)
+)
+
+MISSING_ATTRIBUTE = object()
+MODULE_IMPORT_ATTRIBUTES = (
+    "__name__", "__loader__", "__package__", "__spec__",
+    "__path__", "__file__", "__cached__",
+)
+SPEC_IMPORT_ATTRIBUTES = (
+    "name", "loader", "origin", "submodule_search_locations",
+    "cached", "has_location",
+)
+LOADER_IMPORT_ATTRIBUTES = ("name", "path", "archive", "prefix")
+
+def read_attribute(subject, name):
+    try:
+        return True, getattr(subject, name)
+    except AttributeError:
+        return False, MISSING_ATTRIBUTE
+    except BaseException:
+        abort()
+
+def freeze_attributes(subject, names):
+    return tuple((name,) + read_attribute(subject, name) for name in names)
+
+def verify_attributes(subject, expected):
+    for name, expected_present, expected_value in expected:
+        present, value = read_attribute(subject, name)
+        if present is not expected_present or value is not expected_value:
+            abort()
+
+def frozen_attribute(expected, name):
+    for attribute_name, present, value in expected:
+        if attribute_name == name:
+            return value if present else MISSING_ATTRIBUTE
+    abort()
+
+def freeze_string_list(value):
+    if type(value) is not list or any(type(item) is not str for item in value):
+        abort()
+    return value, tuple(value)
+
+def verify_string_list(value, expected):
+    container, items = expected
+    if value is not container or type(value) is not list or len(value) != len(items):
+        abort()
+    if any(observed is not frozen for observed, frozen in zip(value, items)):
+        abort()
+
+def freeze_package_paths(module, spec):
+    path_present, module_path = read_attribute(module, "__path__")
+    spec_path = None if spec is None else spec.submodule_search_locations
+    if spec_path is None:
+        if path_present:
+            abort()
+        return None, None
+    if not path_present:
+        abort()
+    module_state = freeze_string_list(module_path)
+    spec_state = freeze_string_list(spec_path)
+    if (
+        module_state[0] is not spec_state[0]
+        or len(module_state[1]) != len(spec_state[1])
+        or any(
+            module_item is not spec_item
+            for module_item, spec_item in zip(module_state[1], spec_state[1])
+        )
+    ):
+        abort()
+    return module_state, spec_state
+
+def verify_exact_sequence(value, expected, expected_type):
+    if type(value) is not expected_type or len(value) != len(expected):
+        abort()
+    if any(observed is not frozen for observed, frozen in zip(value, expected)):
+        abort()
 
 def importer_fingerprint(key, importer):
     if importer is None:
         return ("none",)
     if type(importer) is FILE_FINDER:
         if type(key) is not str or type(importer.path) is not str:
+            abort()
+        try:
+            finder_state = vars(importer)
+        except TypeError:
+            abort()
+        if (
+            type(finder_state) is not dict
+            or set(finder_state) != {"path", "_loaders", "_path_mtime", "_path_cache", "_relaxed_path_cache"}
+            or finder_state.get("path") is not importer.path
+            or finder_state.get("_loaders") is not importer._loaders
+            or type(importer._loaders) is not list
+            or type(finder_state.get("_path_cache")) is not set
+            or type(finder_state.get("_relaxed_path_cache")) is not set
+        ):
+            abort()
+        if any(name in CALLABLE_CLASS_ATTRIBUTES for name in finder_state):
             abort()
         if pathlib.Path(importer.path).resolve(strict=False) != pathlib.Path(key).resolve(strict=False):
             abort()
@@ -2957,6 +3451,19 @@ def importer_fingerprint(key, importer):
     if type(importer) is ZIP_IMPORTER:
         if type(key) is not str or type(importer.archive) is not str or type(importer.prefix) is not str:
             abort()
+        try:
+            zip_state = vars(importer)
+        except TypeError:
+            abort()
+        if (
+            type(zip_state) is not dict
+            or set(zip_state) != {"_files", "archive", "prefix"}
+            or type(zip_state.get("_files")) is not dict
+            or zip_state.get("archive") is not importer.archive
+            or zip_state.get("prefix") is not importer.prefix
+            or any(name in CALLABLE_CLASS_ATTRIBUTES for name in zip_state)
+        ):
+            abort()
         archive = pathlib.Path(importer.archive).resolve(strict=False)
         prefix = importer.prefix.replace("/", os.sep).replace("\\", os.sep).strip(os.sep)
         expected_key = archive if not prefix else pathlib.Path(str(archive) + os.sep + prefix)
@@ -2971,6 +3478,7 @@ closed_importer_cache = {
     key: importer_fingerprint(key, importer)
     for key, importer in sys.path_importer_cache.items()
 }
+project_identities = {}
 
 class ExactLoader(SOURCE_LOADER):
     def __init__(self, fullname, path, digest):
@@ -2979,7 +3487,46 @@ class ExactLoader(SOURCE_LOADER):
 
     def get_code(self, fullname):
         raw = capture(pathlib.Path(self.path), self.digest)
-        return self.source_to_code(raw, self.path)
+        return SOURCE_TO_CODE(self, raw, self.path)
+
+    def exec_module(self, module):
+        spec = getattr(module, "__spec__", None)
+        if self.name in project_identities or spec is None or spec.loader is not self:
+            abort()
+        matching_keys = tuple(
+            key
+            for key, value in sys.modules.items()
+            if type(key) is str and key == self.name and value is module
+        )
+        if len(matching_keys) != 1:
+            abort()
+        module_attributes = freeze_attributes(module, MODULE_IMPORT_ATTRIBUTES)
+        spec_attributes = freeze_attributes(spec, SPEC_IMPORT_ATTRIBUTES)
+        loader_attributes = freeze_attributes(self, LOADER_IMPORT_ATTRIBUTES + ("digest",))
+        module_path_state, spec_path_state = freeze_package_paths(module, spec)
+        project_identities[self.name] = (
+            matching_keys[0], module, spec, self,
+            module_attributes, spec_attributes, loader_attributes,
+            module_path_state, spec_path_state,
+        )
+        SOURCE_EXEC_MODULE(self, module)
+        identity = project_identities.get(self.name)
+        if (
+            identity is None
+            or identity[0] not in sys.modules
+            or sys.modules[identity[0]] is not module
+            or getattr(module, "__spec__", None) is not spec
+            or spec.loader is not self
+        ):
+            abort()
+        verify_attributes(module, module_attributes)
+        verify_attributes(spec, spec_attributes)
+        verify_attributes(self, loader_attributes)
+        if module_path_state is not None:
+            verify_string_list(module.__path__, module_path_state)
+            verify_string_list(spec.submodule_search_locations, spec_path_state)
+
+EXACT_LOADER_METHODS = (ExactLoader.get_code, ExactLoader.exec_module)
 
 class ClosedFinder(importlib.abc.MetaPathFinder):
     prefixes = ("tests", "scripts", "python_doctor")
@@ -2990,6 +3537,8 @@ class ClosedFinder(importlib.abc.MetaPathFinder):
         if fullname not in modules:
             raise ModuleNotFoundError("allowlisted module miss")
         raw_path, package, digest = modules[fullname]
+        if type(raw_path) is not str or type(package) is not bool or type(digest) is not str:
+            abort()
         source_path = pathlib.Path(raw_path)
         expected_parent = source_path.parent
         if path is None:
@@ -2999,12 +3548,16 @@ class ClosedFinder(importlib.abc.MetaPathFinder):
             parent_name = fullname.rpartition(".")[0]
             if parent_name not in modules:
                 raise ModuleNotFoundError("unreviewed parent package")
+            parent_identity = project_identities.get(parent_name)
+            if parent_identity is None or parent_identity[7] is None:
+                raise ModuleNotFoundError("unregistered parent package")
+            verify_string_list(path, parent_identity[7])
             parent_source = pathlib.Path(modules[parent_name][0])
             supplied = tuple(pathlib.Path(item).resolve(strict=False) for item in path)
             if supplied != (parent_source.parent,):
                 raise ModuleNotFoundError("redirected package path")
         capture(source_path, digest)
-        loader = ExactLoader(fullname, str(source_path), digest)
+        loader = ExactLoader(fullname, raw_path, digest)
         spec = importlib.util.spec_from_loader(fullname, loader, is_package=package)
         if spec is None or pathlib.Path(spec.origin).resolve(strict=False) != source_path:
             abort()
@@ -3012,7 +3565,17 @@ class ClosedFinder(importlib.abc.MetaPathFinder):
             abort()
         return spec
 
+PROJECT_CLASS_STATES = tuple(
+    freeze_class_state(owner) for owner in (ExactLoader, ClosedFinder)
+)
+
 finder = ClosedFinder()
+try:
+    finder_state = vars(finder)
+except TypeError:
+    abort()
+if type(finder) is not ClosedFinder or type(finder_state) is not dict or finder_state:
+    abort()
 sys.meta_path.insert(0, finder)
 closed_meta = tuple(sys.meta_path)
 trusted_roots = tuple(
@@ -3107,8 +3670,16 @@ def validate_trusted_module(key, module, baseline_names=None):
     )
     if backend_suffixes is None:
         abort()
+    try:
+        loader_state = vars(loader)
+    except TypeError:
+        abort()
     if (
-        type(loader.name) is not str
+        type(loader_state) is not dict
+        or set(loader_state) != {"name", "path"}
+        or loader_state.get("name") is not loader.name
+        or loader_state.get("path") is not loader.path
+        or type(loader.name) is not str
         or type(loader.path) is not str
         or type(spec.origin) is not str
         or type(module_file) is not str
@@ -3133,14 +3704,18 @@ for name, module in tuple(sys.modules.items()):
             getattr(spec, "name", None),
             getattr(module, "__name__", None),
         ))
+    loader = getattr(module, "__loader__", None)
+    module_path_state, spec_path_state = freeze_package_paths(module, spec)
     baseline_modules.append((
         name,
         module,
         spec,
-        getattr(module, "__loader__", None),
-        getattr(module, "__file__", None),
-        getattr(spec, "name", None),
-        getattr(module, "__name__", None),
+        loader,
+        freeze_attributes(module, MODULE_IMPORT_ATTRIBUTES),
+        () if spec is None else freeze_attributes(spec, SPEC_IMPORT_ATTRIBUTES),
+        () if loader is None else freeze_attributes(loader, LOADER_IMPORT_ATTRIBUTES),
+        module_path_state,
+        spec_path_state,
     ))
 baseline_modules = tuple(baseline_modules)
 baseline_key_identities = {id(entry[0]): entry for entry in baseline_modules}
@@ -3148,10 +3723,31 @@ if len(baseline_key_identities) != len(baseline_modules):
     abort()
 
 def verify_import_state():
-    if tuple(sys.path) != closed_path or tuple(sys.path_hooks) != closed_hooks or tuple(sys.meta_path) != closed_meta:
+    if (
+        sys.modules is not MODULES_CONTAINER or type(sys.modules) is not dict
+        or sys.path_importer_cache is not IMPORTER_CACHE_CONTAINER or type(sys.path_importer_cache) is not dict
+        or sys.path is not PATH_CONTAINER or type(sys.path) is not list
+        or sys.path_hooks is not PATH_HOOKS_CONTAINER or type(sys.path_hooks) is not list
+        or sys.meta_path is not META_PATH_CONTAINER or type(sys.meta_path) is not list
+    ):
+        abort()
+    verify_class_states(CORE_CLASS_STATES)
+    verify_class_states(PROJECT_CLASS_STATES)
+    if ExactLoader.get_code is not EXACT_LOADER_METHODS[0] or ExactLoader.exec_module is not EXACT_LOADER_METHODS[1]:
+        abort()
+    try:
+        current_finder_state = vars(finder)
+    except TypeError:
+        abort()
+    if type(finder) is not ClosedFinder or type(current_finder_state) is not dict or current_finder_state:
+        abort()
+    verify_exact_sequence(sys.path, closed_path, list)
+    verify_exact_sequence(sys.path_hooks, closed_hooks, list)
+    verify_exact_sequence(sys.meta_path, closed_meta, list)
+    if sys.meta_path[0] is not finder:
         abort()
     for item in closed_path:
-        importlib.machinery.PathFinder.find_spec(cache_probe, [item])
+        PATH_FIND_SPEC(cache_probe, [item])
     if not set(closed_importer_cache).issubset(sys.path_importer_cache):
         abort()
     for key, observed_importer in sys.path_importer_cache.items():
@@ -3168,7 +3764,12 @@ def verify_import_state():
             abort()
         current_by_key_identity[id(name)] = (name, module)
     for expected in baseline_modules:
-        expected_name, expected_module, expected_spec, expected_loader, expected_file, expected_spec_name, expected_module_name = expected
+        (
+            expected_name, expected_module, expected_spec, expected_loader,
+            expected_module_attributes, expected_spec_attributes,
+            expected_loader_attributes, expected_module_path_state,
+            expected_spec_path_state,
+        ) = expected
         observed = current_by_key_identity.get(id(expected_name))
         if observed is None or observed[0] is not expected_name:
             abort()
@@ -3177,11 +3778,21 @@ def verify_import_state():
             module is not expected_module
             or getattr(module, "__spec__", None) is not expected_spec
             or getattr(module, "__loader__", None) is not expected_loader
-            or getattr(module, "__file__", None) is not expected_file
         ):
             abort()
+        verify_attributes(module, expected_module_attributes)
         if expected_spec is not None:
-            validate_trusted_module(name, module, (expected_spec_name, expected_module_name))
+            verify_attributes(expected_spec, expected_spec_attributes)
+        if expected_loader is not None:
+            verify_attributes(expected_loader, expected_loader_attributes)
+        if expected_module_path_state is not None:
+            verify_string_list(module.__path__, expected_module_path_state)
+            verify_string_list(expected_spec.submodule_search_locations, expected_spec_path_state)
+        if expected_spec is not None:
+            validate_trusted_module(name, module, (
+                frozen_attribute(expected_spec_attributes, "name"),
+                frozen_attribute(expected_module_attributes, "__name__"),
+            ))
     observed_project_modules = {
         name
         for name in sys.modules
@@ -3203,8 +3814,14 @@ def verify_import_state():
         expected = pathlib.Path(raw_path)
         spec = getattr(module, "__spec__", None)
         loader = getattr(module, "__loader__", None)
+        identity = project_identities.get(name)
         if (
-            spec is None
+            identity is None
+            or identity[0] is not name
+            or identity[1] is not module
+            or identity[2] is not spec
+            or identity[3] is not loader
+            or spec is None
             or type(loader) is not ExactLoader
             or spec.loader is not loader
             or type(spec.name) is not str
@@ -3216,6 +3833,29 @@ def verify_import_state():
             or module.__name__ != name
             or loader.name != name
             or loader.digest != digest
+            or loader.path is not raw_path
+            or loader.digest is not digest
+            or spec.origin is not loader.path
+            or module.__file__ is not loader.path
+            or spec.name is not loader.name
+            or module.__name__ is not loader.name
+        ):
+            abort()
+        verify_attributes(module, identity[4])
+        verify_attributes(spec, identity[5])
+        verify_attributes(loader, identity[6])
+        try:
+            loader_state = vars(loader)
+        except TypeError:
+            abort()
+        if (
+            type(loader_state) is not dict
+            or set(loader_state) != {"name", "path", "digest"}
+            or loader_state.get("name") is not loader.name
+            or loader_state.get("path") is not loader.path
+            or loader_state.get("digest") is not loader.digest
+            or type(spec.origin) is not str
+            or type(module.__file__) is not str
         ):
             abort()
         if pathlib.Path(loader.path).resolve(strict=False) != expected:
@@ -3225,13 +3865,19 @@ def verify_import_state():
         if pathlib.Path(module.__file__).resolve(strict=False) != expected:
             abort()
         if package:
-            locations = tuple(pathlib.Path(item).resolve(strict=False) for item in module.__path__)
+            if identity[7] is None or identity[8] is None:
+                abort()
+            verify_string_list(module.__path__, identity[7])
+            verify_string_list(spec.submodule_search_locations, identity[8])
+            raw_locations = identity[7][1]
+            raw_spec_locations = identity[8][1]
+            locations = tuple(pathlib.Path(item).resolve(strict=False) for item in raw_locations)
             if locations != (expected.parent,):
                 abort()
-            spec_locations = tuple(pathlib.Path(item).resolve(strict=False) for item in spec.submodule_search_locations or ())
+            spec_locations = tuple(pathlib.Path(item).resolve(strict=False) for item in raw_spec_locations)
             if spec_locations != (expected.parent,):
                 abort()
-        elif spec.submodule_search_locations is not None:
+        elif spec.submodule_search_locations is not None or identity[7] is not None or identity[8] is not None:
             abort()
         capture(expected, digest)
 
