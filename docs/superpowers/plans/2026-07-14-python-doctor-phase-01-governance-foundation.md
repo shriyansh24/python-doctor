@@ -19,6 +19,116 @@ behavior or migrate packages.
 `unittest`, TOML manifests, JSON schemas/results, Git, pinned Bubblewrap on
 Linux, and pinned OpenSSL with Ed25519 verification support.
 
+### Post-publication Task -1 control amendment: Task 0 oracle portability
+
+This section is a post-publication Task -1 control amendment governing Task 0.
+It must be committed as a plan-only descendant of the previously published
+Task -1 anchor, independently reviewed, published, captured as a new anchor
+generation, and accepted as the live `PublishedAnchorCheckpoint` before Task 0
+is dispatched. The five-field
+`docs/evidence/contracts/phase-01-governance.toml` bootstrap contract and its
+historical blob remain byte-identical. Task 0 never edits this plan or that
+contract; either edit is a task-separation failure, not a digest update.
+
+Checkpoint generations are append-only. Before amendment authoring begins, the
+orchestrator clears the old in-memory checkpoint and prohibits Task 0 dispatch.
+The old sealed external-evidence generation remains immutable and is neither
+renamed, overwritten, nor deleted. The replacement projection, author
+inventory, and review transcript are written and reviewed in a new sibling
+generation directory. A generation contains exactly
+`published-anchor-projection.json`, `author-inventory.json`, and
+`published-anchor-reviews.json`. Its `generation_id` is the lowercase SHA-256
+of the ASCII encoding of the three lowercase file SHA-256 values in that order,
+each followed by LF; its directory name is `generation-<generation_id>`.
+
+After a generation is sealed, the generations' parent contains the only
+mutable durable object, `live-generation.json`. It is a closed canonical JSON
+object using the same RFC 8785-plus-one-LF encoding, with exactly
+`schema_version`, `run_id`, `generation_id`, `relative_directory`, `anchor_sha`,
+`anchor_tree`, `evidence_parent_identity`, `projection_sha256`,
+`author_inventory_sha256`, and `reviews_sha256`. `schema_version` is
+`published-anchor-live-pointer/v1`; `relative_directory` is exactly
+`generation-<generation_id>` with no path separator. Only after both independent
+reviews pass does the orchestrator atomically replace this pointer. The
+`evidence_parent_identity` is the lowercase SHA-256 of the UTF-8 encoding of the
+canonical resolved, native-case-normalized evidence-parent path plus LF. The
+orchestrator resolves `PHASE_01_EXTERNAL_EVIDENCE_ROOT` to that sibling,
+verifies the parent identity and all three hashes, and creates the new in-memory
+checkpoint bound to that identity. Moving or copying the evidence tree changes
+the resolved identity and is `FAIL`. The previous generation stays sealed but
+is superseded and inadmissible for a new Task 0 dispatch.
+
+The orchestration-owned `PHASE_01_TASK_DISPATCH_ROOT` is a separate canonical
+directory, neither equal to nor an ancestor or descendant of the evidence
+parent or any Git worktree. The dispatch record is written there as
+`task-00-dispatch-<generation_id>.json`, never inside a sealed generation. It
+binds the new generation ID, evidence-parent identity, live-pointer digest,
+three sealed-file digests, anchor commit/tree, exact Task 0 author path, and UTC
+dispatch time. Its own captured-byte SHA-256 is supplied as
+`PUBLISHED_TASK_00_DISPATCH_SHA256` and becomes an immutable Task 0 audit and
+acceptance-evidence input.
+
+Task 0 oracle validation and later schema/manifest tooling must remain
+functional on Linux, macOS, and Windows across the supported CPython matrix.
+Where the host exposes descriptor-relative open, directory-only open, and
+no-follow flags, the oracle reader uses handle-bound component traversal and
+binds every opened directory identity before reading the final file.
+
+Where those primitives are unavailable, portable snapshot mode must reject
+components that are symlinks, observed Windows reparse points, or non-regular
+inputs at inspection time; require resolved-root containment; bind the opened
+file's identity and metadata to that inspection; cap the read; and repeat path
+and descriptor checks afterward. This mode detects persistent path substitution
+and file mutation. It does not provide atomic component containment and cannot
+exclude transient namespace or component substitution by a concurrent
+malicious mutator, including substitutions fully restored between checks. It
+is limited to fixed governance inputs in an orchestration-owned clean checkout
+with no untrusted concurrent mutator.
+
+Portable snapshot evidence is inadmissible for `G13-HOSTILE-REPOSITORY` and
+cannot make that check pass. Because the missing secure backend is
+project-owned and `G13-HOSTILE-REPOSITORY` is not externally blockable,
+`G13-HOSTILE-REPOSITORY` must `FAIL` until secure traversal or a reviewed native
+reader is available. A strong Windows claim requires a separately reviewed
+native handle-relative no-reparse reader and green pinned Windows CI across
+CPython 3.9–3.14; portable snapshot mode permits ordinary cross-platform oracle,
+schema, and manifest validation but cannot supply that hostile-repository
+claim.
+
+Every Task 0 local and CI unittest run must satisfy
+`result.wasSuccessful() and skip_count == 0`. A platform-inapplicable native
+test is conditionally defined and registered only on its target platform; it
+must not be registered as a skipped test. Task 0 removes every `skipTest`,
+`skipIf`, `skipUnless`, and skip decorator from
+`tests/test_governance_oracles.py`. A required host fixture that cannot be
+provisioned is a test failure. A capability-independent behavior uses a
+deterministic simulated regression; a platform-native behavior is registered
+only on that platform and is mandatory in the corresponding pinned CI job.
+Windows coverage is mandatory on
+`windows-2022` for the exact Windows x64 patch selectors 3.9.13, 3.10.11,
+3.11.9, 3.12.10, 3.13.14, and 3.14.6. Every cell must directly execute the
+fully qualified native test
+`tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip`
+and the simulated reparse test
+`tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level`,
+then execute the full oracle module. Missing test registration, a skip, junction
+fixture provisioning failure, or any failed cell is `FAIL`; no
+`continue-on-error`, silent skip, or provisional Windows support claim is
+allowed.
+
+Within this new Task 0 Windows workflow, neither its steps nor the Task 0 oracle
+code it invokes contain analytics, telemetry, crash reporting, update checks,
+report or source uploads, artifact publication, coverage service, SARIF
+publication, dependency cache, persisted Git credentials, or package-manager
+installation. Checkout explicitly sets `persist-credentials: false`;
+setup-python selects the matrix interpreter, and no `pip`, `uv`, `poetry`, or
+other package-install command runs. This scoped claim does not describe or
+authorize unrelated pre-existing workflows. GitHub-hosted CI necessarily sends
+job logs, check statuses, and operational metadata to GitHub as part of
+executing the requested workflow. That infrastructure operation is not a
+Python Doctor telemetry feature, and the project does not claim absolute
+metadata silence for cloud CI.
+
 ## Global constraints
 
 - Do not read, copy, translate, paraphrase, compare against, or structurally
@@ -117,6 +227,7 @@ schemas/governance/
 ├── evidence-index-v1.schema.json
 ├── gate-result-v1.schema.json
 ├── legal-review-v1.schema.json
+├── trust-anchor-receipt-v1.schema.json
 └── review-findings-v1.schema.json
 docs/
 ├── evidence/contracts/phase-01-governance.toml
@@ -132,6 +243,14 @@ Modify:
 ```text
 .gitignore
 AGENTS.md
+docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md
+```
+
+Pre-base trust input, independently reviewed on protected `main` and never
+created or modified by Phase 1 tasks:
+
+```text
+governance/trust/legal-release-authority-v1.pem
 ```
 
 `governance/` is normative. `AGENTS.md` prohibits unreviewed weakening of gates,
@@ -397,6 +516,9 @@ class SkillReleaseManifest:
 class ClauseRegistry:
     clauses: tuple[tuple[str, str, str, str], ...]  # id, path, section, digest
 
+    def resolves(self, clause_id: str) -> bool:
+        return any(item[0] == clause_id for item in self.clauses)
+
 
 @dataclass(frozen=True)
 class ToolchainLock:
@@ -421,6 +543,24 @@ class ReviewEvidence:
 
 
 @dataclass(frozen=True)
+class PublishedAnchorBinding:
+    commit: str
+    tree: str
+    projection_sha256: str
+    reviews_sha256: str
+
+
+@dataclass(frozen=True)
+class PhaseContract:
+    schema_version: str
+    governance_base_commit: str
+    governance_base_tree: str
+    source_branch: str
+    phase_branch: str
+    published_anchor: PublishedAnchorBinding | None
+
+
+@dataclass(frozen=True)
 class GovernanceBundle:
     requirements: tuple[RequirementSpec, ...]
     checks: tuple[GateCheckSpec, ...]
@@ -431,6 +571,7 @@ class GovernanceBundle:
     clauses: ClauseRegistry
     toolchain: ToolchainLock
     validation_inputs: ValidationInputsManifest
+    phase_contract: PhaseContract
     manifest_digests: tuple[tuple[str, str], ...]
     validation_mode: ValidationMode
 
@@ -446,6 +587,10 @@ class SubjectIdentity:
     normative_documents_digest: str
     runner_source_digest: str
     runner_version: str
+    published_anchor_commit: str
+    published_anchor_tree: str
+    published_anchor_projection_sha256: str
+    published_anchor_reviews_sha256: str
     dirty_state_digest: str
     identity_kind: IdentityKind
 
@@ -623,6 +768,13 @@ predicates are invalid; every predicate emits a candidate-bound boolean in
 
 **Required sub-skill:** `superpowers:using-git-worktrees`
 
+**Files:**
+
+- Create: `docs/evidence/contracts/phase-01-governance.toml` with only the
+  immutable execution-base binding; Task 2 later extends this same record.
+- Modify: this plan to record the reviewed sequencing and external-anchor
+  acceptance corrections discovered before Task 0.
+
 - [ ] **Step 1: Verify the planning publication base**
 
 Fetch without force or history rewrite. Confirm the connected GitHub app and
@@ -648,10 +800,344 @@ git diff --check origin/main...HEAD
 After the control-document PR is merged, fetch `origin/main`, record that exact
 merge/fast-forward SHA as `GOVERNANCE_BASE_SHA` in the Phase 1 evidence contract,
 and create `agent/phase-01-governance` plus its worktree from that SHA. Before
-Task 0, prove both `HEAD^{tree}` and merge-base match the approved remote state.
-All Task 0–10 review/evidence binds commits in this ancestry. Rebase, cherry-pick,
-replay, or force-push after review invalidates the candidate and requires fresh
-execution/review rather than SHA substitution.
+the first Phase 1 commit, prove `HEAD`, `HEAD^{tree}`, and merge-base match the
+approved remote state. After the contract commit, `HEAD^{tree}` is expected to
+differ because the contract is now part of the subject; prove instead that the
+recorded base is the exact parent and ancestor of `HEAD` and that the recorded
+base tree equals `<base-commit>^{tree}`. All Task 0–10 review/evidence binds
+commits in this ancestry. Rebase, cherry-pick, replay, or force-push after review
+invalidates the candidate and requires fresh execution/review rather than SHA
+substitution.
+
+The Task -1 contract is intentionally minimal and records exactly
+`schema_version`, `governance_base_commit`, `governance_base_tree`,
+`source_branch`, and `phase_branch`. Commit it before Task 0. Task 2 modifies
+this existing record to add the complete evidence contract; it never replaces
+or weakens the frozen base commit/tree.
+
+Immediately after creating the isolated worktree, before creating or editing
+any Phase 1 file, run this pre-edit acceptance block:
+
+```bash
+set -eu
+GOVERNANCE_BASE_SHA=$(git rev-parse origin/main)
+GOVERNANCE_BASE_TREE=$(git rev-parse "$GOVERNANCE_BASE_SHA^{tree}")
+test "$(git rev-parse HEAD)" = "$GOVERNANCE_BASE_SHA"
+test "$(git merge-base origin/main HEAD)" = "$GOVERNANCE_BASE_SHA"
+test "$(git rev-parse 'HEAD^{tree}')" = "$GOVERNANCE_BASE_TREE"
+test -z "$(git status --porcelain=v1)"
+```
+
+Immediately after the contract-introduction commit, and only while that commit
+is `HEAD`, post-commit acceptance parses the TOML with exactly the five declared keys,
+checks `HEAD^ == governance_base_commit`, checks
+`governance_base_commit^{tree} == governance_base_tree`, and requires
+`git merge-base --is-ancestor governance_base_commit HEAD`. It also verifies
+that the contract-addition commit is unique and that its changed-file set is
+limited to the contract plus this separately reviewed sequencing correction.
+
+```bash
+set -eu
+python -c 'import importlib.util,pathlib,subprocess; tomllib=__import__("tomllib" if importlib.util.find_spec("tomllib") else "tomli"); p="docs/evidence/contracts/phase-01-governance.toml"; plan="docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"; d=tomllib.loads(pathlib.Path(p).read_text("utf-8")); run=lambda *a: subprocess.check_output(["git",*a],text=True).strip(); require=lambda c,m: c or (_ for _ in ()).throw(SystemExit(m)); keys={"schema_version","governance_base_commit","governance_base_tree","source_branch","phase_branch"}; require(set(d)==keys and all(isinstance(d[k],str) for k in keys),"invalid contract shape"); require(d["schema_version"]=="phase-01-governance-contract/v1" and d["source_branch"]=="main" and d["phase_branch"]==run("branch","--show-current"),"invalid contract identity"); require(run("rev-parse","HEAD^")==d["governance_base_commit"],"wrong base parent"); require(run("rev-parse",d["governance_base_commit"]+"^{tree}")==d["governance_base_tree"],"wrong base tree"); subprocess.run(["git","merge-base","--is-ancestor",d["governance_base_commit"],"HEAD"],check=True); require(run("log","--diff-filter=A","--format=%H","--",p).splitlines()==[run("rev-parse","HEAD")],"non-unique contract introduction"); require(set(run("diff-tree","--no-commit-id","--name-only","-r","HEAD").splitlines())=={p,plan},"invalid Task -1 commit scope")'
+git diff --check HEAD^
+test -z "$(git status --porcelain=v1)"
+```
+
+- [ ] **Step 4: Freeze the published content-addressed execution anchor**
+
+Publish all Task -1 changes to PR `shriyansh24/python-doctor#2`. After the final
+Task -1 commit is remotely created, stop editing and fetch its immutable
+projection through the connected GitHub app. The orchestration-owned canonical
+`published-anchor-projection/v1` is a closed JSON object with exactly these
+keys: `schema_version`, `purpose`, `run_id`, `repository_id`, `repository`,
+`pull_request_number`, `base_ref`, `base_sha`, `head_ref`, `head_sha`,
+`head_parent_sha`, `head_tree_sha`, `commit_url`,
+`contract_introduction_sha`, `contract_introduction_tree_sha`,
+`contract_introduction_blob_sha`, `captured_at`,
+`changed_file_count`, `task_minus_one_commit_chain`, `head_commit_object_sha256`,
+`head_tree_object_sha256`, `contract_introduction_commit_object_sha256`,
+`contract_introduction_tree_object_sha256`,
+`governance_base_commit_object_sha256`,
+`governance_base_tree_object_sha256`, and `files`. The fixed non-derived values
+are `schema_version = "published-anchor-projection/v1"`,
+`purpose = "phase-01-governance-input"`,
+`run_id = "phase-01-governance-2026-07-14"`, `repository_id = 1300970386`,
+`repository = "shriyansh24/python-doctor"`, `pull_request_number = 2`,
+`base_ref = "main"`, and `head_ref = "agent/phase-01-governance"`;
+SHA/tree values are lowercase 40-hex Git object
+IDs, `commit_url` is the connector-returned canonical HTTPS URL, and
+`captured_at` is UTC RFC 3339 with `Z` and whole seconds.
+
+`files` is an array of closed objects with exactly `status`, `old_path`,
+`new_path`, `mode`, `blob_sha`, `raw_sha256`, and `byte_size`. `status` is one
+of `added`, `modified`, or `removed`; rename detection is disabled and a rename
+is represented as one removed plus one added entry. `old_path` is the base path
+only when removed and otherwise JSON `null`; `new_path` is the head path for
+added/modified and JSON `null` when removed. `mode` is the six-digit head Git
+mode, or the base-tree mode when removed. `blob_sha` is the lowercase 40-hex Git object ID at
+the head (JSON `null` when removed), `raw_sha256` is the lowercase 64-hex digest
+of head bytes (JSON `null` when removed), and `byte_size` is a non-negative
+integer (JSON `null` when removed). Phase 1 Task -1 accepts only regular-file
+mode `100644`; a symlink, executable, submodule/gitlink, directory entry,
+non-blob entry, or non-UTF-8 path is `FAIL`. Paths must already be Unicode NFC,
+contain neither NUL nor `..` components, and are sorted by their UTF-8 byte
+sequence on `(new_path or "", old_path or "")`. The complete file set must
+equal both the connector's fully paginated `list_pr_changed_filenames` result
+and `git diff --name-status -z --no-renames <base>..<head>` after comparing the
+union of non-null old/new paths. The connector wrapper
+guarantees complete pagination; an error, truncation indication, duplicate
+path, or count mismatch is `BLOCKED` before capture and `FAIL` after capture.
+
+The head commit must have exactly one parent. `contract_introduction_blob_sha`
+is the Git blob ID at the exact contract path and must equal the final head's
+blob at that path; the contract file entry is `added`, mode `100644`, and
+byte-identical from introduction through anchor. The projection additionally has
+six lowercase 64-hex fields: `head_commit_object_sha256`,
+`head_tree_object_sha256`, `contract_introduction_commit_object_sha256`,
+`contract_introduction_tree_object_sha256`, `governance_base_commit_object_sha256`,
+and `governance_base_tree_object_sha256`. Each is SHA-256 of the canonical Git
+object bytes `type + SP + decimal-size + NUL + payload`, independently rebuilt
+with `git cat-file --batch`. These fields are part of the closed top-level key
+set above. `repository_id` and repository/ref strings must exactly match the
+fixed values; refs contain only the stated ASCII strings. Capture time comes
+from the orchestration host UTC clock and is informational, not an authority or
+freshness proof.
+
+`task_minus_one_commit_chain` is an ordered array of lowercase 40-hex commit
+IDs from `contract_introduction_sha` through `head_sha`, inclusive. It contains
+at least two unique entries, its first/last entries equal those projected SHAs,
+and every entry's sole parent is the preceding entry (the introduction parent
+is `base_sha`). Every post-introduction commit changes only this plan and leaves
+the projected contract blob unchanged.
+
+Projection validation additionally requires `base_sha` to equal the contract's
+`governance_base_commit`, that commit's tree to equal
+`governance_base_tree`, and `head_sha` to equal both the connector PR head and
+the connector-fetched commit. `head_parent_sha` is its sole parent and equals
+the penultimate commit-chain entry; the introduction SHA is the unique contract-path
+addition commit, its parent is `base_sha`, its tree is the projected
+introduction tree, and its contract blob parses to exactly the historical
+five-key bootstrap contract. The final head contains that same contract blob.
+Any inequality is `FAIL`.
+
+Canonical JSON follows RFC 8785 JSON Canonicalization Scheme for the closed
+object, with the additional invariant that the serialized UTF-8 bytes end in
+exactly one LF; no BOM is permitted. Integers stay in the I-JSON safe range and
+duplicate keys, floats, surrogate code points, and Unicode normalization by the
+serializer are forbidden. `projection_sha256` is the SHA-256 of those canonical
+bytes and is stored outside the subject commit. The remote head commit, not the
+movable branch name or mutable PR prose, is `PHASE_01_PUBLISHED_ANCHOR_SHA`.
+
+The reviewed amendments that define and clarify this procedure are ordered
+post-introduction Task -1 commits. `CONTRACT_INTRODUCTION_SHA` remains the
+unique earlier commit that added the five-field contract and whose parent is
+`GOVERNANCE_BASE_SHA`; the final published anchor must descend linearly from it,
+every later Task -1 commit may change only this plan, and none may alter the
+contract's immutable projection.
+
+After every initial or superseding Task -1 publication, run the following exact
+handoff from the repository's main working tree. The caller supplies absolute
+`REPOSITORY_ROOT`, current `TASK_MINUS_ONE_AUTHORING_WORKTREE`, desired
+`PHASE_01_EXECUTION_WORKTREE`, local `LOCAL_TASK_MINUS_ONE_CANDIDATE_SHA`, and
+connector-reported `PHASE_01_PUBLISHED_ANCHOR_SHA`. If an earlier execution
+worktree is still registered, `PREVIOUS_EXECUTION_WORKTREE` is its absolute
+path; otherwise it is empty. Every supplied worktree must share the repository
+common directory, be clean, and have a named branch. The procedure archives
+both the local amendment candidate and any prior execution generation before
+removing only their clean worktree registrations. It never deletes or rewrites
+an archive branch, never force-fetches, and recreates execution only from the
+verified connector commit.
+
+```bash
+set -eu
+: "${REPOSITORY_ROOT:?absolute repository root is required}"
+: "${TASK_MINUS_ONE_AUTHORING_WORKTREE:?absolute authoring worktree is required}"
+: "${PHASE_01_EXECUTION_WORKTREE:?absolute execution worktree is required}"
+: "${LOCAL_TASK_MINUS_ONE_CANDIDATE_SHA:?local candidate SHA is required}"
+: "${PHASE_01_PUBLISHED_ANCHOR_SHA:?remote anchor SHA is required}"
+: "${PREVIOUS_EXECUTION_WORKTREE:=}"
+
+CANONICAL_BRANCH=agent/phase-01-governance
+REMOTE_TRACKING_REF=refs/remotes/origin/agent/phase-01-governance
+REPOSITORY_ROOT=$(realpath "$REPOSITORY_ROOT")
+AUTHORING_WORKTREE=$(realpath "$TASK_MINUS_ONE_AUTHORING_WORKTREE")
+EXECUTION_WORKTREE=$(realpath -m "$PHASE_01_EXECUTION_WORKTREE")
+COMMON_DIR=$(git -C "$REPOSITORY_ROOT" rev-parse --path-format=absolute --git-common-dir)
+test "$AUTHORING_WORKTREE" != "$REPOSITORY_ROOT"
+test "$AUTHORING_WORKTREE" != "$EXECUTION_WORKTREE"
+test "$(git -C "$AUTHORING_WORKTREE" rev-parse --path-format=absolute --git-common-dir)" = "$COMMON_DIR"
+test "$(git -C "$AUTHORING_WORKTREE" branch --show-current)" = "$CANONICAL_BRANCH"
+test "$(git -C "$AUTHORING_WORKTREE" rev-parse HEAD)" = "$LOCAL_TASK_MINUS_ONE_CANDIDATE_SHA"
+test -z "$(git -C "$AUTHORING_WORKTREE" status --porcelain=v1)"
+
+if test -n "$PREVIOUS_EXECUTION_WORKTREE"; then
+  PREVIOUS_EXECUTION_WORKTREE=$(realpath "$PREVIOUS_EXECUTION_WORKTREE")
+  test "$PREVIOUS_EXECUTION_WORKTREE" = "$EXECUTION_WORKTREE"
+  test "$PREVIOUS_EXECUTION_WORKTREE" != "$AUTHORING_WORKTREE"
+  test "$PREVIOUS_EXECUTION_WORKTREE" != "$REPOSITORY_ROOT"
+  test "$(git -C "$PREVIOUS_EXECUTION_WORKTREE" rev-parse --path-format=absolute --git-common-dir)" = "$COMMON_DIR"
+  test -n "$(git -C "$PREVIOUS_EXECUTION_WORKTREE" branch --show-current)"
+  test -z "$(git -C "$PREVIOUS_EXECUTION_WORKTREE" status --porcelain=v1)"
+  PREVIOUS_SHA=$(git -C "$PREVIOUS_EXECUTION_WORKTREE" rev-parse HEAD)
+  PREVIOUS_SHORT=$(git -C "$PREVIOUS_EXECUTION_WORKTREE" rev-parse --short=12 HEAD)
+  PREVIOUS_ARCHIVE="archive/phase-01-execution-pre-generation-$PREVIOUS_SHORT"
+  test -z "$(git -C "$REPOSITORY_ROOT" branch --list "$PREVIOUS_ARCHIVE")"
+  git -C "$PREVIOUS_EXECUTION_WORKTREE" branch -m "$PREVIOUS_ARCHIVE"
+  git -C "$REPOSITORY_ROOT" worktree remove "$PREVIOUS_EXECUTION_WORKTREE"
+  test "$(git -C "$REPOSITORY_ROOT" rev-parse "refs/heads/$PREVIOUS_ARCHIVE")" = "$PREVIOUS_SHA"
+fi
+
+LOCAL_SHORT=$(git -C "$AUTHORING_WORKTREE" rev-parse --short=12 HEAD)
+LOCAL_ARCHIVE="archive/phase-01-governance-local-$LOCAL_SHORT"
+test -z "$(git -C "$REPOSITORY_ROOT" branch --list "$LOCAL_ARCHIVE")"
+git -C "$AUTHORING_WORKTREE" branch -m "$LOCAL_ARCHIVE"
+git -C "$REPOSITORY_ROOT" worktree remove "$AUTHORING_WORKTREE"
+test "$(git -C "$REPOSITORY_ROOT" rev-parse "refs/heads/$LOCAL_ARCHIVE")" = "$LOCAL_TASK_MINUS_ONE_CANDIDATE_SHA"
+test ! -e "$EXECUTION_WORKTREE"
+
+git -C "$REPOSITORY_ROOT" fetch origin refs/heads/agent/phase-01-governance:refs/remotes/origin/agent/phase-01-governance
+test "$(git -C "$REPOSITORY_ROOT" rev-parse "$REMOTE_TRACKING_REF")" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test -z "$(git -C "$REPOSITORY_ROOT" branch --list "$CANONICAL_BRANCH")"
+git -C "$REPOSITORY_ROOT" worktree add -b "$CANONICAL_BRANCH" "$EXECUTION_WORKTREE" "$REMOTE_TRACKING_REF"
+git -C "$EXECUTION_WORKTREE" branch --set-upstream-to=origin/agent/phase-01-governance
+test "$(git -C "$EXECUTION_WORKTREE" rev-parse HEAD)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git -C "$EXECUTION_WORKTREE" rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git -C "$EXECUTION_WORKTREE" branch --show-current)" = "$CANONICAL_BRANCH"
+test -z "$(git -C "$EXECUTION_WORKTREE" status --porcelain=v1)"
+```
+
+This preserves the five-field contract's branch identity while ensuring
+execution starts from GitHub's actual commit rather than a locally predicted
+equivalent. In the execution worktree verify:
+
+```bash
+set -eu
+export GIT_NO_REPLACE_OBJECTS=1
+test -z "${GIT_ALTERNATE_OBJECT_DIRECTORIES:-}"
+GIT_COMMON_DIR=$(git --no-replace-objects rev-parse --path-format=absolute --git-common-dir)
+test -z "$(git --no-replace-objects for-each-ref --format='%(refname)' refs/replace)"
+test ! -e "$GIT_COMMON_DIR/info/grafts"
+test ! -e "$GIT_COMMON_DIR/objects/info/alternates"
+test ! -e "$GIT_COMMON_DIR/shallow"
+test "$(git --no-replace-objects rev-parse --is-shallow-repository)" = "false"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_SHA:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_TREE:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_PARENT:-}"
+test -n "${PHASE_01_TASK_MINUS_ONE_CHAIN:-}"
+test -n "${GOVERNANCE_BASE_SHA:-}"
+test -n "${CONTRACT_INTRODUCTION_SHA:-}"
+test -n "${CONTRACT_INTRODUCTION_TREE:-}"
+test -n "${CONTRACT_INTRODUCTION_BLOB:-}"
+test "$(git rev-parse HEAD)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git branch --show-current)" = "agent/phase-01-governance"
+test "$(git rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git rev-parse refs/remotes/origin/agent/phase-01-governance)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git rev-parse 'HEAD^{tree}')" = "$PHASE_01_PUBLISHED_ANCHOR_TREE"
+test "$(git rev-parse 'HEAD^')" = "$PHASE_01_PUBLISHED_ANCHOR_PARENT"
+test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 2
+test "$(git merge-base "$GOVERNANCE_BASE_SHA" HEAD)" = "$GOVERNANCE_BASE_SHA"
+test "$(git rev-parse "$CONTRACT_INTRODUCTION_SHA^")" = "$GOVERNANCE_BASE_SHA"
+test "$(git rev-parse "$CONTRACT_INTRODUCTION_SHA^{tree}")" = "$CONTRACT_INTRODUCTION_TREE"
+test "$(git rev-parse "$CONTRACT_INTRODUCTION_SHA:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+test "$(git rev-parse "HEAD:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+git merge-base --is-ancestor "$CONTRACT_INTRODUCTION_SHA" HEAD
+test "$(git rev-list --reverse "$CONTRACT_INTRODUCTION_SHA^..HEAD")" = "$PHASE_01_TASK_MINUS_ONE_CHAIN"
+test "$(git diff-tree --no-commit-id --name-only -r "$CONTRACT_INTRODUCTION_SHA" | wc -l)" -eq 2
+git diff-tree --no-commit-id --name-only -r "$CONTRACT_INTRODUCTION_SHA" | grep -Fx "docs/evidence/contracts/phase-01-governance.toml"
+git diff-tree --no-commit-id --name-only -r "$CONTRACT_INTRODUCTION_SHA" | grep -Fx "docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"
+for TASK_MINUS_ONE_COMMIT in $(git rev-list --reverse "$CONTRACT_INTRODUCTION_SHA..HEAD"); do
+  test "$(git rev-list --parents -n 1 "$TASK_MINUS_ONE_COMMIT" | wc -w)" -eq 2
+  test "$(git diff-tree --no-commit-id --name-only -r "$TASK_MINUS_ONE_COMMIT")" = "docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"
+  test "$(git rev-parse "$TASK_MINUS_ONE_COMMIT:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+done
+test -z "$(git submodule status)"
+test -z "$(git status --porcelain=v1)"
+```
+
+`PHASE_01_TASK_MINUS_ONE_CHAIN` is the projection array joined with LF and no
+final LF. Every Git ancestry, parent, tree, diff, blob, and object-hash query in
+capture/review runs with replacement objects disabled. A replace ref, graft,
+shallow boundary, object alternate, or chain mismatch is `FAIL`; reviewers do
+not accept a normal Git query as a substitute for the replacement-disabled
+result.
+
+The orchestrator supplies those variables from the canonical projection, not
+from repository text. `PHASE_01_EXTERNAL_EVIDENCE_ROOT` is an absolute,
+orchestration-owned directory whose resolved path must be outside every Git
+worktree. It contains `published-anchor-projection.json`,
+`author-inventory.json`, and `published-anchor-reviews.json`; no Task -1
+external artifact is written below a repository root. `author-inventory.json`
+is closed schema `published-anchor-authors/v1` with exactly `schema_version`,
+`run_id`, `author_task_paths`, and `mutation_events`. `author_task_paths` is a
+sorted duplicate-free array containing `/root` plus every agent task that
+edited Task -1. `mutation_events` is a chronological array of closed objects
+with exactly `event_kind`, `actor_id`, `operation`, `input_identity`, and
+`result_identity`; all five are strings. `event_kind` is `local` or `github`.
+For `local`, `actor_id` is a collaboration task path, `operation` is one of
+`apply_patch` or `git_commit`, and input/result identities are one lowercase
+SHA-256 file digest or 40-hex Git tree/commit ID per event. For `github`,
+`actor_id` is exactly `60398680`, `operation` is one of `create_blob`,
+`create_tree`, `create_commit`, or `update_ref`, and input/result identities are
+one lowercase Git object/ref-target SHA per event. A local `apply_patch` event
+is explicitly a logical authoring batch: it starts at one stable reviewed
+file/tree identity and ends at the next stable reviewed file/tree identity.
+Intermediate uncommitted edit states are not review subjects, are not assigned
+invented identities, and do not become separate events; the batch's sole author
+task remains fully disclosed in `author_task_paths`. Multiple stable reviewed
+results or multiple GitHub API results require multiple chronological events;
+no arrays, nested objects, empty strings, or unlisted values are accepted. It uses the same
+canonical bytes and its SHA-256 is bound by the review transcript. Two distinct
+review agents independently compare the projection with the fresh local Git
+objects, contract, and author inventory.
+
+This is explicitly a session-scoped procedural checkpoint, not a cryptographic
+receipt, trusted timestamp, or replay-resistant capability. The available
+platform exposes authenticated collaboration task identities and result
+messages but no receipt issuer/verifier API. The closed review transcript has
+exactly `schema_version`, `run_id`, `projection_sha256`, `anchor_sha`,
+`anchor_tree`, `author_inventory_sha256`, and `reviews`; its first two values
+are `published-anchor-reviews/v1` and the projection run ID. `reviews` contains
+exactly two objects, each with exactly `task_path`, `role`, `verdict`,
+`result_text`, and `completed_at`. Roles are exactly one `specification` and one
+`adversarial`; verdict is exactly uppercase `PASS`. `result_text` is the exact
+Unicode collaboration payload delivered to root, with no newline added,
+removed, or normalized.
+Timestamps use the same informational UTC grammar and canonical JSON uses the
+same RFC 8785-plus-one-LF bytes as the projection. Each entry records the actual
+collaboration result rather than rewritten review prose. Review task paths
+must be distinct, absent from the author inventory, have made no filesystem or
+GitHub mutations, and return `PASS` over the same projection.
+
+Immediately before and after each reviewer runs, root records and compares
+subject `HEAD`, tree, branch/upstream SHA, porcelain-v1 status bytes, projection
+digest, and author-inventory digest. Any observable mutation is `FAIL`; because
+the platform exposes no reviewer tool-call audit API, this procedural check
+does not claim detection of a perfectly reverted hidden mutation. The root
+orchestrator consumes the actual collaboration results in the current session,
+writes the transcript exactly once, recomputes all three external-file digests, and sets
+the in-memory `PublishedAnchorCheckpoint` only after all comparisons pass.
+There is deliberately no repository constructor or verifier for this
+checkpoint. Task 0 may be dispatched only in that same live session and its
+separate session dispatch record binds the generation ID, evidence-parent
+identity, live-pointer digest, all three external-file SHA-256 values, and its
+own captured-byte digest. The content-addressed commit, tree, and files sealed
+by one Task -1 generation are never mutated. A later approved
+post-publication plan-only amendment creates a new descendant and sibling
+generation under this amendment's supersession protocol; it does not rewrite
+the prior Git objects or external generation. If the session or any external
+file is lost, moved, or changed, rerun both reviews; do not reconstruct approval
+from repository strings. A mismatch, missing object, wrong repository/PR,
+substituted commit, dirty worktree, incomplete file set, or self-review is
+`FAIL`; GitHub/reviewer unavailability is `BLOCKED`.
+
+Branch movement after capture cannot mutate the content-addressed commit/tree.
+Every later orchestration identity check binds the checkpoint's projection and
+review-transcript digests as immutable execution inputs. Tasks 0–10 necessarily
+create new candidate commits; those use the
+separate candidate `SubjectIdentity` and do not re-anchor Task -1. A change to
+the Task -1 control inputs or their ancestry invalidates the checkpoint and requires
+fresh publication/review. Protected refs remain optional release hardening, not
+a prerequisite for governance Task 0.
 
 ---
 
@@ -674,6 +1160,486 @@ execution/review rather than SHA substitution.
 - Create: `scripts/governance/__init__.py`
 - Create: `scripts/governance/validate_oracles.py`
 - Create: `tests/test_governance_oracles.py`
+- Create: `.github/workflows/governance-oracles-windows.yml`
+
+- [ ] **Step 0: Consume the live Task -1 checkpoint**
+
+Before dispatching any Task 0 author, the root orchestrator confirms the
+in-memory `PublishedAnchorCheckpoint` still exists, recomputes all three external
+file digests, rechecks `HEAD`, tree, upstream, ancestry, and cleanliness, and
+writes `task-00-dispatch-<generation_id>.json` under the separate
+`PHASE_01_TASK_DISPATCH_ROOT`, never inside the exact three-file sealed
+generation or its parent. The dispatch payload has exactly these closed keys:
+`schema_version: str`, `task_id: int`, `generation_id: str`,
+`evidence_parent_identity: str`, `live_pointer_sha256: str`,
+`projection_sha256: str`, `author_inventory_sha256: str`,
+`reviews_sha256: str`, `anchor_sha: str`, `anchor_tree: str`,
+`author_task_path: str`, and `dispatched_at: str`. Its schema is exactly
+`task-dispatch/v1`, task ID is integer `0`, hashes have their exact lowercase
+40/64-hex widths, author path equals the dispatched collaboration task, and
+time is whole-second UTC RFC 3339 no more than 15 minutes old and not in the
+future. Canonical bytes use RFC 8785's applicable closed string/integer subset
+plus one LF.
+
+Acceptance rejects a zero-byte dispatch, `dispatch file exceeds 16384 bytes`,
+`duplicate dispatch key`, `dispatch is stale`, unrelated field values,
+symlinks, observed Windows reparse points, and non-regular inputs. Pointer,
+three sealed files, and dispatch are each captured once through a bounded
+no-follow regular-file reader with before/opened/after descriptor and path
+identity checks. Digests and JSON parsing consume those same captured bytes.
+The process runs under isolated Python with no inherited `PYTHON*` behavior,
+uses explicit conditional failures rather than optimization-removable
+`assert`, and binds the dispatch byte digest into the Task 0 audit and
+acceptance evidence. The Task 0 author receives immutable control-document
+paths and anchor SHA, never mutable PR prose. Run in the execution worktree:
+
+```bash
+set -eu
+test -n "${PUBLISHED_ANCHOR_PROJECTION_SHA256:-}"
+test -n "${PUBLISHED_ANCHOR_AUTHORS_SHA256:-}"
+test -n "${PUBLISHED_ANCHOR_REVIEWS_SHA256:-}"
+test -n "${PUBLISHED_ANCHOR_GENERATION_ID:-}"
+test -n "${PUBLISHED_ANCHOR_LIVE_POINTER_SHA256:-}"
+test -n "${PUBLISHED_ANCHOR_EVIDENCE_PARENT_IDENTITY:-}"
+test -n "${PUBLISHED_TASK_00_DISPATCH_SHA256:-}"
+test -n "${TASK_00_AUTHOR_TASK_PATH:-}"
+test -n "${PHASE_01_EXTERNAL_EVIDENCE_PARENT:-}"
+test -n "${PHASE_01_EXTERNAL_EVIDENCE_ROOT:-}"
+test -n "${PHASE_01_TASK_DISPATCH_ROOT:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_SHA:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_TREE:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_PARENT:-}"
+test -n "${PHASE_01_TASK_MINUS_ONE_CHAIN:-}"
+test -n "${GOVERNANCE_BASE_SHA:-}"
+test -n "${CONTRACT_INTRODUCTION_SHA:-}"
+test -n "${CONTRACT_INTRODUCTION_TREE:-}"
+test -n "${CONTRACT_INTRODUCTION_BLOB:-}"
+env -i PATH="$PATH" LC_ALL=C.UTF-8 python -I -B - \
+  "$PHASE_01_EXTERNAL_EVIDENCE_PARENT" \
+  "$PHASE_01_EXTERNAL_EVIDENCE_ROOT" \
+  "$PHASE_01_TASK_DISPATCH_ROOT" \
+  "$PUBLISHED_ANCHOR_GENERATION_ID" \
+  "$PUBLISHED_ANCHOR_EVIDENCE_PARENT_IDENTITY" \
+  "$PUBLISHED_ANCHOR_LIVE_POINTER_SHA256" \
+  "$PUBLISHED_ANCHOR_PROJECTION_SHA256" \
+  "$PUBLISHED_ANCHOR_AUTHORS_SHA256" \
+  "$PUBLISHED_ANCHOR_REVIEWS_SHA256" \
+  "$PUBLISHED_TASK_00_DISPATCH_SHA256" \
+  "$PHASE_01_PUBLISHED_ANCHOR_SHA" \
+  "$PHASE_01_PUBLISHED_ANCHOR_TREE" \
+  "$TASK_00_AUTHOR_TASK_PATH" \
+  "$PHASE_01_PUBLISHED_ANCHOR_PARENT" \
+  "$PHASE_01_TASK_MINUS_ONE_CHAIN" \
+  "$GOVERNANCE_BASE_SHA" \
+  "$CONTRACT_INTRODUCTION_SHA" \
+  "$CONTRACT_INTRODUCTION_TREE" \
+  "$CONTRACT_INTRODUCTION_BLOB" <<'PY'
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+MAX_CONTROL_BYTES = 16_384
+MAX_SEALED_BYTES = 1_048_576
+HEX40 = re.compile(r"[0-9a-f]{40}\Z")
+HEX64 = re.compile(r"[0-9a-f]{64}\Z")
+AUTHOR_PATH = re.compile(r"/root(?:/[a-z0-9_]+)+\Z")
+RUN_ID = "phase-01-governance-2026-07-14"
+
+
+def fail(detail):
+    raise SystemExit(detail)
+
+
+def require(condition, detail):
+    if not condition:
+        fail(detail)
+
+
+def is_reparse(metadata):
+    flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    attributes = getattr(metadata, "st_file_attributes", 0)
+    return stat.S_ISLNK(metadata.st_mode) or bool(flag and attributes & flag)
+
+
+def signature(metadata):
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        stat.S_IFMT(metadata.st_mode),
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def canonical_directory(raw, label):
+    candidate = Path(raw)
+    require(candidate.is_absolute(), f"{label} is not absolute")
+    resolved = candidate.resolve(strict=True)
+    require(Path(os.path.abspath(candidate)) == resolved, f"{label} is not canonical")
+    metadata = resolved.lstat()
+    require(not is_reparse(metadata), f"{label} is a link or reparse point")
+    require(stat.S_ISDIR(metadata.st_mode), f"{label} is not a directory")
+    return resolved
+
+
+def read_verified(path, maximum, label):
+    descriptor = None
+    try:
+        before = path.lstat()
+        require(not is_reparse(before), f"{label} is a link or reparse point")
+        require(stat.S_ISREG(before.st_mode), f"{label} is not regular")
+        require(0 < before.st_size <= maximum, f"{label} has invalid size")
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        require(bool(nofollow), f"{label} no-follow open is unavailable")
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOINHERIT", 0)
+            | nofollow
+            | getattr(os, "O_NONBLOCK", 0)
+        )
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        require(signature(opened) == signature(before), f"{label} identity changed")
+        chunks = bytearray()
+        while len(chunks) <= maximum:
+            chunk = os.read(descriptor, min(65_536, maximum + 1 - len(chunks)))
+            if not chunk:
+                break
+            chunks.extend(chunk)
+        require(len(chunks) <= maximum, f"{label} exceeds byte limit")
+        after_descriptor = os.fstat(descriptor)
+        after_path = path.lstat()
+        require(signature(after_descriptor) == signature(opened), f"{label} mutated")
+        require(signature(after_path) == signature(opened), f"{label} path changed")
+        return bytes(chunks)
+    except OSError:
+        fail(f"{label} could not be captured")
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def parse_canonical(raw, label):
+    require(raw.endswith(b"\n") and not raw.endswith(b"\n\n"), f"{label} newline")
+
+    def closed_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                fail(f"duplicate {label} key")
+            result[key] = value
+        return result
+
+    def reject_number(_value):
+        fail(f"{label} contains a forbidden number")
+
+    try:
+        value = json.loads(
+            raw[:-1].decode("utf-8", "strict"),
+            object_pairs_hook=closed_pairs,
+            parse_float=reject_number,
+            parse_constant=reject_number,
+        )
+        canonical = json.dumps(
+            value,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8") + b"\n"
+    except (TypeError, UnicodeError, ValueError):
+        fail(f"{label} is invalid JSON")
+    require(raw == canonical, f"{label} is not canonical")
+    require(isinstance(value, dict), f"{label} root is not an object")
+    return value
+
+
+def value_matches(mapping, key, expected):
+    return type(mapping.get(key)) is type(expected) and mapping.get(key) == expected
+
+
+def main(arguments):
+    require(len(arguments) == 19, "invalid acceptance arguments")
+    (
+        parent_raw,
+        generation_raw,
+        dispatch_root_raw,
+        generation_id,
+        parent_identity,
+        pointer_digest,
+        projection_digest,
+        authors_digest,
+        reviews_digest,
+        dispatch_digest,
+        anchor_sha,
+        anchor_tree,
+        author_task_path,
+        anchor_parent,
+        task_minus_one_chain,
+        governance_base_sha,
+        contract_introduction_sha,
+        contract_introduction_tree,
+        contract_introduction_blob,
+    ) = arguments
+    for digest in (
+        generation_id,
+        parent_identity,
+        pointer_digest,
+        projection_digest,
+        authors_digest,
+        reviews_digest,
+        dispatch_digest,
+    ):
+        require(isinstance(digest, str) and HEX64.fullmatch(digest), "invalid digest")
+    require(HEX40.fullmatch(anchor_sha) is not None, "invalid anchor SHA")
+    require(HEX40.fullmatch(anchor_tree) is not None, "invalid anchor tree")
+    for git_identity in (
+        anchor_parent,
+        governance_base_sha,
+        contract_introduction_sha,
+        contract_introduction_tree,
+        contract_introduction_blob,
+    ):
+        require(HEX40.fullmatch(git_identity) is not None, "invalid Git identity")
+    require(AUTHOR_PATH.fullmatch(author_task_path) is not None, "invalid author path")
+    projected_chain = task_minus_one_chain.splitlines()
+    require(
+        len(projected_chain) >= 2
+        and len(set(projected_chain)) == len(projected_chain)
+        and all(HEX40.fullmatch(commit) is not None for commit in projected_chain),
+        "invalid Task -1 chain",
+    )
+    require(projected_chain[0] == contract_introduction_sha, "wrong chain introduction")
+    require(projected_chain[-1] == anchor_sha, "wrong chain head")
+    require(projected_chain[-2] == anchor_parent, "wrong chain parent")
+
+    parent = canonical_directory(parent_raw, "evidence parent")
+    generation = canonical_directory(generation_raw, "evidence generation")
+    dispatch_root = canonical_directory(dispatch_root_raw, "dispatch root")
+    require(generation == parent / f"generation-{generation_id}", "wrong generation")
+    require(
+        dispatch_root != parent
+        and parent not in dispatch_root.parents
+        and dispatch_root not in parent.parents,
+        "dispatch root is not separate",
+    )
+    canonical_parent = os.path.normcase(os.path.normpath(str(parent)))
+    observed_parent_identity = hashlib.sha256(
+        (canonical_parent + "\n").encode("utf-8")
+    ).hexdigest()
+    require(observed_parent_identity == parent_identity, "evidence parent moved")
+
+    raw_worktrees = subprocess.check_output(
+        ["git", "worktree", "list", "--porcelain", "-z"]
+    )
+    worktrees = [
+        Path(item[9:].decode("utf-8", "strict")).resolve(strict=True)
+        for item in raw_worktrees.split(b"\0")
+        if item.startswith(b"worktree ")
+    ]
+    common = Path(
+        subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            text=True,
+        ).strip()
+    ).resolve(strict=True)
+    require(bool(worktrees), "worktree inventory is empty")
+    for external in (parent, generation, dispatch_root):
+        for repository_path in (*worktrees, common):
+            require(
+                external != repository_path
+                and repository_path not in external.parents
+                and external not in repository_path.parents,
+                "external evidence overlaps a repository",
+            )
+
+    expected_entries = [
+        "author-inventory.json",
+        "published-anchor-projection.json",
+        "published-anchor-reviews.json",
+    ]
+    require(
+        sorted(path.name for path in generation.iterdir()) == expected_entries,
+        "generation file set differs",
+    )
+
+    pointer_raw = read_verified(parent / "live-generation.json", MAX_CONTROL_BYTES, "pointer")
+    require(hashlib.sha256(pointer_raw).hexdigest() == pointer_digest, "pointer digest")
+    pointer = parse_canonical(pointer_raw, "pointer")
+    pointer_keys = {
+        "schema_version",
+        "run_id",
+        "generation_id",
+        "relative_directory",
+        "anchor_sha",
+        "anchor_tree",
+        "evidence_parent_identity",
+        "projection_sha256",
+        "author_inventory_sha256",
+        "reviews_sha256",
+    }
+    require(set(pointer) == pointer_keys, "pointer keys differ")
+    pointer_expected = {
+        "schema_version": "published-anchor-live-pointer/v1",
+        "run_id": RUN_ID,
+        "generation_id": generation_id,
+        "relative_directory": f"generation-{generation_id}",
+        "anchor_sha": anchor_sha,
+        "anchor_tree": anchor_tree,
+        "evidence_parent_identity": parent_identity,
+        "projection_sha256": projection_digest,
+        "author_inventory_sha256": authors_digest,
+        "reviews_sha256": reviews_digest,
+    }
+    require(pointer == pointer_expected, "pointer values differ")
+
+    sealed = {}
+    for name, expected_digest in (
+        ("published-anchor-projection.json", projection_digest),
+        ("author-inventory.json", authors_digest),
+        ("published-anchor-reviews.json", reviews_digest),
+    ):
+        captured = read_verified(generation / name, MAX_SEALED_BYTES, name)
+        require(hashlib.sha256(captured).hexdigest() == expected_digest, f"{name} digest")
+        sealed[name] = parse_canonical(captured, name)
+    projection = sealed["published-anchor-projection.json"]
+    authors = sealed["author-inventory.json"]
+    reviews = sealed["published-anchor-reviews.json"]
+    require(value_matches(projection, "run_id", RUN_ID), "projection run")
+    require(value_matches(projection, "base_sha", governance_base_sha), "projection base")
+    require(value_matches(projection, "head_sha", anchor_sha), "projection anchor")
+    require(value_matches(projection, "head_tree_sha", anchor_tree), "projection tree")
+    require(value_matches(projection, "head_parent_sha", anchor_parent), "projection parent")
+    require(
+        value_matches(projection, "task_minus_one_commit_chain", projected_chain),
+        "projection chain",
+    )
+    require(
+        value_matches(projection, "contract_introduction_sha", contract_introduction_sha),
+        "projection contract introduction",
+    )
+    require(
+        value_matches(
+            projection,
+            "contract_introduction_tree_sha",
+            contract_introduction_tree,
+        ),
+        "projection contract tree",
+    )
+    require(
+        value_matches(
+            projection,
+            "contract_introduction_blob_sha",
+            contract_introduction_blob,
+        ),
+        "projection contract blob",
+    )
+    require(value_matches(authors, "run_id", RUN_ID), "authors run")
+    require(value_matches(reviews, "run_id", RUN_ID), "reviews run")
+    require(value_matches(reviews, "anchor_sha", anchor_sha), "reviews anchor")
+    require(value_matches(reviews, "anchor_tree", anchor_tree), "reviews tree")
+
+    generation_material = "".join(
+        digest + "\n" for digest in (projection_digest, authors_digest, reviews_digest)
+    ).encode("ascii")
+    require(
+        hashlib.sha256(generation_material).hexdigest() == generation_id,
+        "generation identity differs",
+    )
+
+    dispatch_path = dispatch_root / f"task-00-dispatch-{generation_id}.json"
+    dispatch_raw = read_verified(dispatch_path, MAX_CONTROL_BYTES, "dispatch file")
+    require(hashlib.sha256(dispatch_raw).hexdigest() == dispatch_digest, "dispatch digest")
+    dispatch = parse_canonical(dispatch_raw, "dispatch")
+    dispatch_keys = {
+        "schema_version",
+        "task_id",
+        "generation_id",
+        "evidence_parent_identity",
+        "live_pointer_sha256",
+        "projection_sha256",
+        "author_inventory_sha256",
+        "reviews_sha256",
+        "anchor_sha",
+        "anchor_tree",
+        "author_task_path",
+        "dispatched_at",
+    }
+    require(set(dispatch) == dispatch_keys, "dispatch keys differ")
+    dispatch_expected = {
+        "schema_version": "task-dispatch/v1",
+        "task_id": 0,
+        "generation_id": generation_id,
+        "evidence_parent_identity": parent_identity,
+        "live_pointer_sha256": pointer_digest,
+        "projection_sha256": projection_digest,
+        "author_inventory_sha256": authors_digest,
+        "reviews_sha256": reviews_digest,
+        "anchor_sha": anchor_sha,
+        "anchor_tree": anchor_tree,
+        "author_task_path": author_task_path,
+    }
+    for key, expected in dispatch_expected.items():
+        require(value_matches(dispatch, key, expected), f"dispatch {key} differs")
+    dispatched_at = dispatch.get("dispatched_at")
+    require(isinstance(dispatched_at, str), "dispatch time type")
+    try:
+        dispatched = datetime.strptime(dispatched_at, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError:
+        fail("dispatch time grammar")
+    now = datetime.now(timezone.utc)
+    require(dispatched <= now, "dispatch is in the future")
+    require(now - dispatched <= timedelta(minutes=15), "dispatch is stale")
+
+
+try:
+    main(sys.argv[1:])
+except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
+    fail("Task 0 acceptance failed")
+PY
+export GIT_NO_REPLACE_OBJECTS=1
+test -z "${GIT_ALTERNATE_OBJECT_DIRECTORIES:-}"
+GIT_COMMON_DIR=$(git --no-replace-objects rev-parse --path-format=absolute --git-common-dir)
+test -z "$(git --no-replace-objects for-each-ref --format='%(refname)' refs/replace)"
+test ! -e "$GIT_COMMON_DIR/info/grafts"
+test ! -e "$GIT_COMMON_DIR/objects/info/alternates"
+test ! -e "$GIT_COMMON_DIR/shallow"
+test "$(git --no-replace-objects rev-parse --is-shallow-repository)" = "false"
+test "$(git --no-replace-objects rev-parse HEAD)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git --no-replace-objects rev-parse 'HEAD^{tree}')" = "$PHASE_01_PUBLISHED_ANCHOR_TREE"
+test "$(git --no-replace-objects rev-parse 'HEAD^')" = "$PHASE_01_PUBLISHED_ANCHOR_PARENT"
+test "$(git --no-replace-objects rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git --no-replace-objects branch --show-current)" = "agent/phase-01-governance"
+test "$(git --no-replace-objects rev-list --parents -n 1 HEAD | wc -w)" -eq 2
+test "$(git --no-replace-objects rev-parse "$CONTRACT_INTRODUCTION_SHA^")" = "$GOVERNANCE_BASE_SHA"
+test "$(git --no-replace-objects rev-parse "$CONTRACT_INTRODUCTION_SHA^{tree}")" = "$CONTRACT_INTRODUCTION_TREE"
+test "$(git --no-replace-objects rev-parse "$CONTRACT_INTRODUCTION_SHA:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+test "$(git --no-replace-objects rev-parse "HEAD:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+test "$(git --no-replace-objects rev-list --reverse "$CONTRACT_INTRODUCTION_SHA^..HEAD")" = "$PHASE_01_TASK_MINUS_ONE_CHAIN"
+for TASK_MINUS_ONE_COMMIT in $(git --no-replace-objects rev-list --reverse "$CONTRACT_INTRODUCTION_SHA..HEAD"); do
+  test "$(git --no-replace-objects rev-list --parents -n 1 "$TASK_MINUS_ONE_COMMIT" | wc -w)" -eq 2
+  test "$(git --no-replace-objects diff-tree --no-commit-id --name-only -r "$TASK_MINUS_ONE_COMMIT")" = "docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"
+  test "$(git --no-replace-objects rev-parse "$TASK_MINUS_ONE_COMMIT:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+done
+test -z "$(git status --porcelain=v1)"
+```
+
+An absent in-memory checkpoint, changed digest, stale dispatch, or changed
+identity is not recoverable from repository text: rerun Task -1 capture and
+both reviews. `docs/audits/2026-07-14-governance-oracle-review.md` records the
+accepted `PUBLISHED_TASK_00_DISPATCH_SHA256`, and every Task 0 review/evidence
+record binds that digest with the three checkpoint digests.
 
 - [ ] **Step 1: Write and prove the RED oracle validator**
 
@@ -698,11 +1664,111 @@ inventory. They do not author the manifests or runner.
 
 The oracle includes child IDs, required flags, clause/requirement edges, and
 truth criteria, but no executable command realization. The review records source
-document digests and all dispositions. Commit these exact files before Task 1.
+document digests and all dispositions. `tests/test_governance_oracles.py` also
+freezes the Windows workflow's runner; exact Windows x64 patch matrix 3.9.13,
+3.10.11, 3.11.9, 3.12.10, 3.13.14, and 3.14.6; exact action SHAs; two fully
+qualified mandatory test names; full-module execution; and zero-skip result
+check. The native junction test is conditionally defined only when
+`os.name == "nt"`; it has no skip decorator, and failure to provision its
+junction fixture fails the test. The simulated reparse test remains registered
+on every platform. A source regression asserts that the module contains no
+runtime skip call or unittest skip decorator.
+
+Create `.github/workflows/governance-oracles-windows.yml` exactly as follows.
+The two action revisions are the verified official `actions/checkout` v7.0.0
+and `actions/setup-python` v6.3.0 commits. Both use Node 24 and require runner
+2.327.1 or newer; the hosted `windows-2022` runner satisfies that prerequisite.
+The official setup-python versions manifest supplies the exact stable Windows
+x64 selectors 3.9.13, 3.10.11, 3.11.9, 3.12.10, 3.13.14, and 3.14.6. Later
+security releases for the older minors are source-only and have no Windows x64
+asset, so moving minor-only selectors are forbidden.
+
+```yaml
+name: Governance oracles on Windows
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/governance-oracles-windows.yml"
+      - "docs/**"
+      - "scripts/governance/**"
+      - "tests/fixtures/governance/**"
+      - "tests/test_governance_oracles.py"
+  push:
+    branches:
+      - "agent/phase-01-governance"
+    paths:
+      - ".github/workflows/governance-oracles-windows.yml"
+      - "docs/**"
+      - "scripts/governance/**"
+      - "tests/fixtures/governance/**"
+      - "tests/test_governance_oracles.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  governance-oracles-windows:
+    name: CPython ${{ matrix.python-version }} / windows-2022
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.9.13"
+          - "3.10.11"
+          - "3.11.9"
+          - "3.12.10"
+          - "3.13.14"
+          - "3.14.6"
+    steps:
+      - name: Check out the immutable subject
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Select the matrix interpreter
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: "x64"
+          check-latest: false
+      - name: Run mandatory native, simulated, and full oracle tests
+        shell: pwsh
+        env:
+          PYTHONPATH: "src;."
+        run: |
+          @'
+          import sys
+          import unittest
+
+          required = (
+              "tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip",
+              "tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level",
+          )
+
+          def run_zero_skip(name: str, expected_count=None) -> bool:
+              suite = unittest.defaultTestLoader.loadTestsFromName(name)
+              if expected_count is not None and suite.countTestCases() != expected_count:
+                  return False
+              result = unittest.TextTestRunner(verbosity=2).run(suite)
+              skip_count = len(result.skipped)
+              return result.wasSuccessful() and skip_count == 0
+
+          required_results = tuple(run_zero_skip(name, 1) for name in required)
+          success = all(required_results)
+          success = run_zero_skip("tests.test_governance_oracles") and success
+          raise SystemExit(0 if success else 1)
+          '@ | python -
+```
+
+Run the local zero-skip gate and commit these exact files before Task 1.
 
 ```bash
 PYTHONPATH=src:. python -m unittest tests.test_governance_oracles -v
-git add scripts/__init__.py scripts/governance/__init__.py scripts/governance/validate_oracles.py tests/test_governance_oracles.py tests/fixtures/governance/expected-requirement-ids.txt tests/fixtures/governance/expected-skill-ids.txt tests/fixtures/governance/expected-profile-domain-ids.txt tests/fixtures/governance/expected-provenance-sources.toml tests/fixtures/governance/expected-gate-clauses.toml tests/fixtures/governance/expected-gate-checks.toml docs/audits/2026-07-14-governance-oracle-review.md
+python -c 'import sys,unittest; suite=unittest.defaultTestLoader.loadTestsFromName("tests.test_governance_oracles"); result=unittest.TextTestRunner(verbosity=2).run(suite); skip_count=len(result.skipped); raise SystemExit(0 if result.wasSuccessful() and skip_count == 0 else 1)'
+git add .github/workflows/governance-oracles-windows.yml scripts/__init__.py scripts/governance/__init__.py scripts/governance/validate_oracles.py tests/test_governance_oracles.py tests/fixtures/governance/expected-requirement-ids.txt tests/fixtures/governance/expected-skill-ids.txt tests/fixtures/governance/expected-profile-domain-ids.txt tests/fixtures/governance/expected-provenance-sources.toml tests/fixtures/governance/expected-gate-clauses.toml tests/fixtures/governance/expected-gate-checks.toml docs/audits/2026-07-14-governance-oracle-review.md
 git diff --cached --name-only
 git commit -m "docs(governance): freeze independent oracle inventories"
 ```
@@ -734,8 +1800,16 @@ implementer may not approve their corresponding oracle.
 
 **Interfaces:**
 
-- Produces: `GateState`, `RequirementSpec`, `GateCheckSpec`, `GovernanceBundle`,
-  `Violation`, `load_governance()`, and `validate_governance()`.
+- Produces: every model in **Stable interfaces**, including
+  `PublishedAnchorBinding` and `PhaseContract`; `Violation`;
+  `load_governance()`; `validate_governance()`;
+  `load_requirements(path: Path) -> tuple[RequirementSpec, ...]`;
+  `load_clause_registry(path: Path) -> ClauseRegistry`;
+  `load_phase_contract(path: Path, *, expected_stage:
+  Literal["bootstrap", "anchor-bound"]) -> PhaseContract`; and
+  `bootstrap_projection(contract: PhaseContract) -> tuple[str, str, str, str,
+  str]`. Task 1 unit tests use temporary synthetic v1/v2 files so both closed
+  stage parsers exist before Task 2 populates the repository's v2 contract.
 - Consumes: only Python standard library and the existing `tomli` compatibility
   dependency.
 
@@ -856,40 +1930,155 @@ git commit -m "feat(governance): add strict manifest contracts"
 - Create: `tests/test_requirements_manifest.py`
 - Consume without editing: `tests/fixtures/governance/expected-gate-clauses.toml`
 - Consume without editing: `tests/fixtures/governance/expected-requirement-ids.txt`
-- Create: `docs/evidence/contracts/phase-01-governance.toml`
+- Modify without changing the Task -1 base binding:
+  `docs/evidence/contracts/phase-01-governance.toml`
+- Modify: `tests/governance_helpers.py` with pure local Git-history validation;
+  it has no GitHub client, checkpoint constructor, or external-evidence parser.
 
 **Interfaces:**
 
-- Consumes: `load_governance()` and `validate_governance()`.
+- Consumes: `load_governance()`, `validate_governance()`, and four inert values
+  exported by the current live `PublishedAnchorCheckpoint`: published anchor
+  commit/tree plus projection/review-transcript SHA-256.
 - Produces: canonical `RequirementSpec` records referenced by every task/gate.
+- Uses the Task 1 phase-contract types/loaders. Bootstrap mode accepts only the
+  five-key v1 document; anchor-bound mode accepts only the v2 root/table shape
+  below.
+- Adds test-only `unique_addition_commit(path: str) -> str`,
+  `load_phase_contract_from_git(commit: str, path: str) -> PhaseContract`,
+  `commit_parent(commit: str) -> str`, `git_tree(commit: str) -> str`, and
+  `is_ancestor(ancestor: str, descendant: str) -> bool` in
+  `tests/governance_helpers.py`; every Git call uses fixed argv, disables
+  hooks/config/external diff, and rejects ambiguous or multi-parent results.
 
 - [ ] **Step 1: Write the failing completeness validator**
 
 ```python
-def test_manifest_matches_independently_frozen_id_set() -> None:
-    requirements = load_requirements(ROOT / "governance/requirements.toml")
-    lines = (ROOT / "tests/fixtures/governance/expected-requirement-ids.txt").read_text(encoding="utf-8").splitlines()
-    assert len(lines) == len(set(lines)) == 105
-    assert all(line and not line.startswith("#") for line in lines)
-    expected = frozenset(lines)
-    assert {item.requirement_id for item in requirements} == expected
+import unittest
 
-def test_requirement_state_is_derived_not_authored() -> None:
-    requirements = load_requirements(ROOT / "governance/requirements.toml")
-    assert all(not hasattr(item, "release_status") for item in requirements)
-    assert all(not hasattr(item, "current_phase_status") for item in requirements)
+from scripts.gates.loader import (
+    bootstrap_projection,
+    load_clause_registry,
+    load_phase_contract,
+    load_requirements,
+)
+from tests.governance_helpers import (
+    ROOT,
+    commit_parent,
+    git_tree,
+    is_ancestor,
+    load_phase_contract_from_git,
+    unique_addition_commit,
+)
 
-def test_every_source_clause_resolves_to_frozen_digest() -> None:
-    requirements = load_requirements(ROOT / "governance/requirements.toml")
-    registry = load_clause_registry(ROOT / "governance/clause-registry.toml")
-    assert all(registry.resolves(clause) for item in requirements for clause in item.source_clauses)
+
+class TestRequirementsManifest(unittest.TestCase):
+    def test_manifest_matches_independently_frozen_id_set(self) -> None:
+        requirements = load_requirements(ROOT / "governance/requirements.toml")
+        lines = (ROOT / "tests/fixtures/governance/expected-requirement-ids.txt").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        self.assertEqual(len(lines), 105)
+        self.assertEqual(len(lines), len(set(lines)))
+        self.assertTrue(all(line and not line.startswith("#") for line in lines))
+        self.assertEqual(
+            {item.requirement_id for item in requirements}, frozenset(lines)
+        )
+
+    def test_requirement_state_is_derived_not_authored(self) -> None:
+        requirements = load_requirements(ROOT / "governance/requirements.toml")
+        self.assertTrue(all(not hasattr(item, "release_status") for item in requirements))
+        self.assertTrue(
+            all(not hasattr(item, "current_phase_status") for item in requirements)
+        )
+
+    def test_every_source_clause_resolves_to_frozen_digest(self) -> None:
+        requirements = load_requirements(ROOT / "governance/requirements.toml")
+        registry = load_clause_registry(ROOT / "governance/clause-registry.toml")
+        self.assertTrue(
+            all(
+                registry.resolves(clause)
+                for item in requirements
+                for clause in item.source_clauses
+            )
+        )
+
+    def test_task_minus_one_base_binding_is_immutable(self) -> None:
+        contract = load_phase_contract(
+            ROOT / "docs/evidence/contracts/phase-01-governance.toml",
+            expected_stage="anchor-bound",
+        )
+        introduction = unique_addition_commit(
+            "docs/evidence/contracts/phase-01-governance.toml"
+        )
+        original = load_phase_contract_from_git(
+            introduction, "docs/evidence/contracts/phase-01-governance.toml"
+        )
+        self.assertEqual(
+            bootstrap_projection(contract), bootstrap_projection(original)
+        )
+        self.assertEqual(commit_parent(introduction), contract.governance_base_commit)
+        self.assertEqual(
+            git_tree(contract.governance_base_commit), contract.governance_base_tree
+        )
+        self.assertIsNotNone(contract.published_anchor)
+        anchor = contract.published_anchor
+        assert anchor is not None
+        self.assertTrue(is_ancestor(introduction, anchor.commit))
+        self.assertTrue(is_ancestor(anchor.commit, "HEAD"))
+        self.assertEqual(
+            git_tree(anchor.commit), anchor.tree
+        )
+        self.assertRegex(anchor.projection_sha256, r"^[0-9a-f]{64}$")
+        self.assertRegex(anchor.reviews_sha256, r"^[0-9a-f]{64}$")
 ```
+
+The live `PublishedAnchorCheckpoint` remains a session orchestration
+precondition and is never synthesized in repository tests. Task 2 migrates the
+bootstrap contract to this exact closed schema:
+
+```toml
+schema_version = "phase-01-governance-contract/v2"
+governance_base_commit = "<unchanged-40-hex>"
+governance_base_tree = "<unchanged-40-hex>"
+source_branch = "main"
+phase_branch = "agent/phase-01-governance"
+
+[published_anchor]
+commit = "<checkpoint-anchor-40-hex>"
+tree = "<checkpoint-tree-40-hex>"
+projection_sha256 = "<checkpoint-projection-64-hex>"
+reviews_sha256 = "<checkpoint-review-transcript-64-hex>"
+```
+
+The v2 root has exactly the six keys shown and the table has exactly four; all
+unknown keys, wrong types, uppercase hex, and alternate stage/version shapes
+fail. `bootstrap_projection(v2)` returns a five-tuple whose first value is the
+historical constant `phase-01-governance-contract/v1` and whose remaining four
+values come from the unchanged base/branch fields, allowing exact comparison
+with the unique historical v1 blob.
+
+Immediately before accepting the Task 2 commit, the live root orchestrator
+compares all four table values with its in-memory checkpoint, recomputes the
+projection, review, and author-inventory digests, proves
+`introduction -> anchor -> candidate` ancestry,
+and writes a separate immutable `task-02-acceptance.json` session record with
+the candidate SHA/tree and three sealed input digests. Repeat that
+orchestration check before every later task dispatch and final evidence
+assembly; losing the session checkpoint requires fresh reviews. The unit test
+proves only the repository's network-free half: the original five-value
+bootstrap projection is preserved, the introduction parent/tree are intact,
+the fixed published anchor is an ancestor with the recorded tree, and both
+contract-recorded external digests are well-formed. Plausible repository-authored digest strings
+cannot satisfy the separate live checkpoint comparison.
 
 - [ ] **Step 2: Verify the validator fails because the manifest is absent**
 
 Run: `PYTHONPATH=src:. python -m unittest tests.test_requirements_manifest -v`
 
-Expected: missing `governance/requirements.toml`.
+Expected: deliberate failures for the missing requirements/clause manifests
+and the not-yet-migrated anchor-bound v2 contract; no import, collection, or
+undefined-name error.
 
 - [ ] **Step 3: Populate every approved requirement**
 
@@ -939,10 +2128,12 @@ clause/requirement records rather than the phrase “complete approved surface.�
 
 `clause-registry.toml` freezes a stable clause ID, source document path, section,
 normalized clause SHA-256, and assertion kind for every normative bullet. The
-separately reviewed `expected-gate-clauses.toml` is created in this task, before
-the executable gate catalog, and cannot be derived from `gates.toml`.
+separately reviewed `expected-gate-clauses.toml` was created and frozen in
+Task 0. This task consumes and validates it without editing it, before the
+executable gate catalog, and it cannot be derived from `gates.toml`.
 
-`validation-inputs.toml` is the sole versioned identity inventory. It lists the
+`validation-inputs.toml` is the sole versioned repository-input identity
+inventory. It lists the
 master prompt, primary specification, validation gates, proof architecture,
 traceability index, this Phase 1 task contract, root instructions, every
 normative governance manifest, every governance schema, every independently
@@ -961,6 +2152,18 @@ Bootstrap uses `load_requirements(path)` rather than the all-manifest
 final strict loading activates only after every validation input exists in Task
 10.
 
+The repository base-binding validator reads the contract's unique Git addition
+commit and compares the current five-value bootstrap projection to the
+historical blob. It rejects multiple addition commits, a non-base parent, a
+changed base commit or tree, a base/tree mismatch, missing anchor ancestry, or
+rewritten/replayed local history. The orchestration validator independently
+requires exact equality between the four inert checkpoint exports in the
+contract and the live session checkpoint, including the complete reviewed
+GitHub projection and transcript digests. Neither validator can substitute for
+the other. Hashing only the current editable contract is insufficient. GitHub
+unavailability before Task -1 capture is `BLOCKED`; a captured projection or
+checkpoint mismatch is `FAIL`.
+
 - [ ] **Step 4: Verify GREEN and regression**
 
 Run:
@@ -975,7 +2178,7 @@ Expected: all tests pass with no missing family, gate, artifact, or test mapping
 - [ ] **Step 5: Commit**
 
 ```bash
-git add governance/clause-registry.toml governance/requirements.toml governance/toolchain.lock.toml governance/validation-inputs.toml tests/test_requirements_manifest.py docs/evidence/contracts/phase-01-governance.toml
+git add governance/clause-registry.toml governance/requirements.toml governance/toolchain.lock.toml governance/validation-inputs.toml tests/test_requirements_manifest.py tests/governance_helpers.py docs/evidence/contracts/phase-01-governance.toml
 git diff --cached --name-only
 git commit -m "docs(governance): freeze requirements traceability"
 ```
@@ -1021,7 +2224,22 @@ def test_rejects_approval_without_authority_and_scope() -> None:
     assert REQUIRED_APPROVAL_FIELDS.issubset(missing_fields(violations))
 
 def test_raw_legal_artifact_is_never_committed() -> None:
-    assert ".evidence/" in (ROOT / ".gitignore").read_text()
+    legal_paths = (
+        ".evidence/legal/permission-message.raw",
+        ".evidence/legal/permission-message.sha256",
+        ".evidence/legal/trusted-review-root.pem",
+        ".evidence/legal/trust-anchor-receipt.json",
+        ".evidence/legal/trust-anchor-receipt.sig",
+        ".evidence/legal/permission-review.json",
+        ".evidence/legal/permission-review.sig",
+    )
+    for path in legal_paths:
+        ignored = subprocess.run(
+            ["git", "check-ignore", "--no-index", "-q", "--", path],
+            cwd=ROOT,
+            check=False,
+        )
+        assert ignored.returncode == 0, path
     tracked = subprocess.run(
         ["git", "ls-files", "-z", ".evidence"],
         cwd=ROOT,
@@ -1177,10 +2395,15 @@ git commit -m "docs(governance): record clean-room provenance controls"
 - Create locally, never commit: `.evidence/legal/permission-message.raw`
 - Create locally, never commit: `.evidence/legal/permission-message.sha256`
 - Obtain externally, never commit: `.evidence/legal/trusted-review-root.pem`
+- Obtain externally, never commit: `.evidence/legal/trust-anchor-receipt.json`
+- Obtain externally, never commit: `.evidence/legal/trust-anchor-receipt.sig`
 - Obtain externally, never commit: `.evidence/legal/permission-review.json`
 - Obtain externally, never commit: `.evidence/legal/permission-review.sig`
+- Consume only from the immutable governance base, never create or modify in
+  Tasks 0–10: `governance/trust/legal-release-authority-v1.pem`
 - Update after authorized review: `governance/provenance.toml`
 - Create: `schemas/governance/legal-review-v1.schema.json`
+- Create: `schemas/governance/trust-anchor-receipt-v1.schema.json`
 - Create: `tests/test_legal_disposition.py`
 
 **Interfaces:**
@@ -1190,9 +2413,27 @@ git commit -m "docs(governance): record clean-room provenance controls"
 - Produces: sanitized provenance metadata only. It never stores message text,
   headers, personal identifiers, or legal correspondence in Git.
 
+**Precondition and blocked-state rule:** Task 4 must not create any
+`.evidence/legal/*` file until Task 3 has committed `.evidence/` to `.gitignore`
+and its tracked-file rejection test passes. Task 4 may implement and test the
+fail-closed derivation mechanics while external review is absent. It must not
+add an approved sanitized disposition, report G00 `PASS`, or treat a user
+assertion as authority until the complete externally rooted signed review is
+present and verifies successfully; otherwise G00 remains `BLOCKED`.
+
 - [ ] **Step 1: Add fail-closed transition tests**
 
 ```python
+LEGAL_EVIDENCE_PATHS = (
+    ".evidence/legal/permission-message.raw",
+    ".evidence/legal/permission-message.sha256",
+    ".evidence/legal/trusted-review-root.pem",
+    ".evidence/legal/trust-anchor-receipt.json",
+    ".evidence/legal/trust-anchor-receipt.sig",
+    ".evidence/legal/permission-review.json",
+    ".evidence/legal/permission-review.sig",
+)
+
 def test_permission_summary_cannot_approve_legal_gate() -> None:
     record = restricted_record(
         artifact_sha256="",
@@ -1202,17 +2443,39 @@ def test_permission_summary_cannot_approve_legal_gate() -> None:
 
 
 def test_signed_fixture_review_can_satisfy_derivation_mechanics() -> None:
-    raw, trust_root, signed_review = signed_legal_fixture()
+    authority_root, trust_root, signed_anchor, raw, signed_review = signed_legal_fixture()
     record = restricted_record(
         artifact_sha256=sha256(raw),
         review_attestation_sha256=sha256(signed_review.json_bytes),
     )
-    assert legal_state(record, raw, verify_review(signed_review, trust_root)) is GateState.PASS
+    anchored_root = verify_trust_anchor(signed_anchor, authority_root)
+    assert legal_state(record, raw, verify_review(signed_review, trust_root, anchored_root)) is GateState.PASS
 
 def test_complete_self_authored_strings_never_pass() -> None:
     raw = b"invented permission"
     record = complete_looking_record(artifact_sha256=sha256(raw))
     assert legal_state(record, raw, trusted_review=None) is GateState.BLOCKED
+
+def test_self_generated_review_root_cannot_substitute_for_base_authority() -> None:
+    attacker = self_generated_legal_bundle()
+    assert verify_trust_anchor(attacker.anchor, governance_base_authority_key()) is None
+    assert legal_state(attacker.record, attacker.raw, trusted_review=None) is GateState.BLOCKED
+
+def test_missing_base_authority_key_is_blocked() -> None:
+    assert live_legal_state(governance_base_without_authority_key()) is GateState.BLOCKED
+
+def test_trust_anchor_receipt_rejects_wrong_semantics() -> None:
+    assert_anchor_rejected(anchor_receipt(purpose="anything-else"))
+    assert_anchor_rejected(anchor_receipt(schema_version="trust-anchor-receipt/v0"))
+    assert_anchor_rejected(anchor_receipt(authority_identity="substitute-authority"))
+    assert_anchor_rejected(anchor_receipt(not_after=VERIFICATION_TIME - 1))
+    assert_anchor_rejected(anchor_receipt(not_before=VERIFICATION_TIME + 1))
+
+def test_trust_anchor_receipt_rejects_noncanonical_or_ambiguous_bytes() -> None:
+    assert_anchor_rejected(anchor_with_duplicate_json_key())
+    assert_anchor_rejected(anchor_with_unknown_key())
+    assert_anchor_rejected(anchor_with_noncanonical_json())
+    assert_anchor_rejected(anchor_signed_under_legal_review_domain())
 ```
 
 - [ ] **Step 2: Verify RED**
@@ -1241,12 +2504,26 @@ grantor identity and authority evidence digest, exact repository/revision,
 AI-use/adaptation/redistribution/material scopes, conditions, attribution,
 reviewer identity/authority basis, decision/date, and review schema version.
 The authorized reviewer signs it with Ed25519. `trusted-review-root.pem` is
-provisioned out of band by the independent release authority; its fingerprint
-is never learned from editable repository metadata. The pinned OpenSSL verifier
-checks the signature and exact canonical bytes. `legal_state()` requires the
-raw digest match and a verified trusted review; complete-looking TOML strings,
-`initial_state`, `approved = true`, or user assertion can produce only
-`BLOCKED`. Record clean-implementer exposure certifications separately.
+provisioned out of band by the independent release authority, but a caller-
+supplied root is never trusted by itself. The independent release authority
+also signs `trust-anchor-receipt.json`, which binds that review-root fingerprint,
+purpose, validity interval, authority identity, and schema version. The receipt
+signature is verified only with
+`governance/trust/legal-release-authority-v1.pem` read byte-for-byte from
+`governance_base_commit`, not from the current worktree, environment, CLI, or
+editable metadata. If that authority key was absent from the immutable base,
+the live legal child is unconditionally `BLOCKED`; introducing it requires a
+separately authorized protected-main change and a complete Phase 1 restart from
+the new governance base. Tasks 0–10 may implement synthetic verification
+mechanics but may not add or replace that key.
+
+The pinned OpenSSL verifier checks both signatures and exact canonical bytes.
+`legal_state()` requires the raw digest match, a review root whose fingerprint
+matches the authority-signed receipt, and a verified trusted review. A locally
+generated root, a caller-provided expected fingerprint, complete-looking TOML
+strings, `initial_state`, `approved = true`, or user assertion can produce only
+`BLOCKED` or `FAIL`, never `PASS`. Record clean-implementer exposure
+certifications separately.
 
 `legal-review-v1` allows closed objects, UTF-8 strings, booleans, arrays, and
 bounded base-10 integers only—no floats. Parsing rejects duplicate keys,
@@ -1256,16 +2533,40 @@ escapes, lowercase literals, compact separators, UTF-8, and exactly one trailing
 newline, prefixed for signature by `python-doctor/legal-review/v1\0`. Parsing
 then reserialization must reproduce the signed bytes exactly.
 
+`trust-anchor-receipt-v1` uses the same closed-object, duplicate-key rejection,
+integer, Unicode, and canonical JSON rules, but signs bytes under the distinct
+domain prefix `python-doctor/trust-anchor-receipt/v1\0`. It requires exactly
+`schema_version = "trust-anchor-receipt/v1"`,
+`purpose = "python-doctor/legal-review-root"`,
+`authority_identity = "python-doctor-independent-release-authority-v1"`, the
+lowercase SHA-256 fingerprint of the review root, and bounded UTC integer
+`not_before`/`not_after` values with `not_before <= verification_time <=
+not_after`. Verification time comes from the gate execution clock, is recorded
+in the evidence ledger, and is not accepted from receipt fields, CLI arguments,
+environment variables, or editable metadata. Wrong schema, purpose, authority
+identity, domain prefix, key fingerprint, validity interval, canonical bytes,
+or signature produces `FAIL`; an absent base authority key or absent external
+receipt remains `BLOCKED`.
+
 The legal check receives only declared read-only external files inside the
 containment backend. Its `CheckResult.external_input_hashes` records raw
-permission, canonical review JSON, and signature SHA-256; it separately records
-the trusted-root fingerprint and verified authority-evidence digest. Any change
-invalidates the check without changing `SubjectIdentity`.
+permission, canonical review JSON, review signature, canonical trust-anchor
+receipt, and receipt signature SHA-256. It separately records the base-loaded
+release-authority key fingerprint, anchored review-root fingerprint, and
+verified authority-evidence digest. Any change invalidates the check without
+changing `SubjectIdentity`.
 
 - [ ] **Step 5: Prove raw material is ignored, not absent**
 
 ```python
 def test_raw_permission_artifact_is_not_tracked() -> None:
+    for path in LEGAL_EVIDENCE_PATHS:
+        ignored = subprocess.run(
+            ["git", "check-ignore", "--no-index", "-q", "--", path],
+            cwd=ROOT,
+            check=False,
+        )
+        assert ignored.returncode == 0, path
     tracked = subprocess.run(
         ["git", "ls-files", "-z", ".evidence"],
         cwd=ROOT,
@@ -1284,7 +2585,7 @@ authorized disposition; otherwise
 `BLOCKED`.
 
 ```bash
-git add governance/provenance.toml schemas/governance/legal-review-v1.schema.json tests/test_legal_disposition.py
+git add governance/provenance.toml schemas/governance/legal-review-v1.schema.json schemas/governance/trust-anchor-receipt-v1.schema.json tests/test_legal_disposition.py
 git diff --cached --name-only
 git commit -m "docs(legal): record restricted-source disposition"
 ```
@@ -1346,9 +2647,9 @@ record is `main`; agent refs are permitted review staging and candidate refs are
 permitted verification staging, not releases. Mark tags, Releases, Pages, PyPI,
 editor registries, containers, and every other destination `not_authorized`;
 unknown destination kinds deny by default. Freeze `core`, `api`, `cli`,
-`native-rules`, and `reports` as essential
-for host and target grammar 3.9–3.14 on Linux/macOS/Windows. Later integrations
-are `planned` with decision phases and cannot support current claims.
+`native-rules`, and `reports` as essential for host and target grammar 3.9–3.14
+on Linux/macOS/Windows. Later integrations are `planned` with decision phases
+and cannot support current claims.
 
 Repository orientation on 2026-07-14 used the connected GitHub app, which
 reported default branch `main` at commit
@@ -1528,6 +2829,26 @@ def test_hostile_filesystem_entries_fail_without_reading() -> None:
     with assert_raises(InvalidCandidate):
         identify_subject(root)
 
+def test_anchor_binding_is_derived_only_from_strict_v2_contract() -> None:
+    root = complete_identity_fixture()
+    identity = identify_subject(root)
+    contract = load_phase_contract(
+        root / "docs/evidence/contracts/phase-01-governance.toml",
+        expected_stage="anchor-bound",
+    )
+    anchor = contract.published_anchor
+    assert anchor is not None
+    assert identity.published_anchor_commit == anchor.commit
+    assert identity.published_anchor_tree == anchor.tree
+    assert identity.published_anchor_projection_sha256 == anchor.projection_sha256
+    assert identity.published_anchor_reviews_sha256 == anchor.reviews_sha256
+
+def test_missing_tampered_or_nonancestor_anchor_binding_is_invalid() -> None:
+    for mutation in ("missing", "wrong-tree", "malformed-digest", "nonancestor"):
+        root = complete_identity_fixture(anchor_mutation=mutation)
+        with assert_raises(InvalidCandidate):
+            identify_subject(root)
+
 def test_redaction_removes_sensitive_values_and_controls() -> None:
     raw = f"{HOME}/repo secret={SECRET}\x1b[31m hostile.py"
     redacted = redact_text(raw, secrets=(SECRET,))
@@ -1555,7 +2876,15 @@ minimal environment. Subject identity derives the runner version from the
 versioned source plus runner-source digest; no caller-supplied version is
 trusted. Its dependency-lock digest covers the versioned toolchain lock bytes;
 observed executable versions/digests belong only to the separate execution-
-environment identity. The validation-input digest is the canonical hash of every
+environment identity. `identify_subject()` loads the strict v2 `PhaseContract`
+itself and accepts no caller-supplied anchor values. It copies all four
+`SubjectIdentity` anchor fields only from `published_anchor`, rejects a missing
+binding, proves the unique contract introduction is an ancestor of the anchor,
+proves the anchor/tree match and anchor ancestry to the candidate, and rejects
+malformed digest syntax or a locally inconsistent tree before returning an
+identity. A syntactically valid but substituted projection/review digest is
+indistinguishable to repository-only code and is rejected only by the live
+orchestration checkpoint comparison. The validation-input digest is the canonical hash of every
 entry named by `validation-inputs.toml`; final identity refuses any missing
 entry. Task 7 uses a complete temporary normative fixture because live Task
 8–10 inputs do not yet exist; bootstrap subjects use
@@ -1783,10 +3112,12 @@ def test_permission_check_is_mandatory_and_state_is_externally_derived() -> None
     assert check.external_prerequisite is True
     assert not hasattr(check, "initial_state")
     assert legal_fixture_state("missing-review") is GateState.BLOCKED
+    assert legal_fixture_state("missing-base-authority-key") is GateState.BLOCKED
+    assert legal_fixture_state("unanchored-review-root") is GateState.FAIL
     assert legal_fixture_state("ambiguous-scope") is GateState.BLOCKED
     assert legal_fixture_state("forged-signature") is GateState.FAIL
-    assert legal_fixture_state("trusted-complete-review") is GateState.PASS
-    assert live_legal_state(ROOT) is trusted_external_state_or_blocked(ROOT)
+    assert legal_fixture_state("base-anchored-complete-review") is GateState.PASS
+    assert live_legal_state(ROOT) is GateState.BLOCKED
 ```
 
 - [ ] **Step 2: Verify RED**
@@ -1809,9 +3140,14 @@ governance checks are scheduled. Later checks remain
 
 `G00-LEGAL-PERMISSION` has no editable state. Its result is derived only from
 the restricted-source record, raw-artifact digest match, complete grant fields,
-clean-implementer certifications, and authorized reviewer disposition. Missing
-or ambiguous external proof yields `BLOCKED`; contradictory or forged project-
-owned metadata yields `FAIL`.
+clean-implementer certifications, the release-authority key read from the
+immutable governance base, a valid authority-signed trust-anchor receipt, an
+exact anchored review-root fingerprint, and the authorized review signature and
+disposition. Missing or ambiguous external proof yields `BLOCKED`;
+contradictory, forged, substituted-root, expired, or noncanonical evidence
+yields `FAIL`. Because this execution's governance base contains no release-
+authority key, its live G00 result is unconditionally `BLOCKED`; synthetic
+fixtures prove mechanics only and cannot make this subject pass.
 
 The frozen child-ID inventory is:
 
@@ -1902,7 +3238,8 @@ git commit -m "docs(gates): freeze executable release catalog"
 
 - Create: `AGENTS.md`
 - Create: `docs/audits/2026-07-14-phase-01-governance-review-process.md`
-- Update: `docs/evidence/contracts/phase-01-governance.toml`
+- Consume without editing: `docs/evidence/contracts/phase-01-governance.toml`;
+  its v2 anchor binding was frozen in Task 2 and is immutable thereafter.
 - Create: `schemas/governance/review-findings-v1.schema.json`
 - Create: `tests/test_repository_instructions.py`
 
@@ -1967,7 +3304,7 @@ commit. A prose “approved” statement cannot satisfy G19.
 - [ ] **Step 4: Commit the immutable review subject**
 
 ```bash
-git add AGENTS.md schemas/governance/review-findings-v1.schema.json tests/test_repository_instructions.py docs/audits/2026-07-14-phase-01-governance-review-process.md docs/evidence/contracts/phase-01-governance.toml
+git add AGENTS.md schemas/governance/review-findings-v1.schema.json tests/test_repository_instructions.py docs/audits/2026-07-14-phase-01-governance-review-process.md
 git diff --cached --name-only
 git commit -m "docs(review): freeze phase one review contract"
 git status --porcelain=v1
@@ -2000,7 +3337,9 @@ Expected:
 - governance configuration is valid;
 - the Phase 1 ledger proves every scheduled child across G00–G20 executed under
   containment or names the exact external blocker; an unexecuted child fails;
-- G00 contributes `BLOCKED` until trusted legal review is supplied;
+- G00 contributes `BLOCKED` for this execution because its immutable governance
+  base lacks the release-authority key; external review files alone cannot
+  change that state;
 - every project-owned Phase 1 check passes; missing legal or containment
   authority remains explicitly `BLOCKED`, never skipped or green;
 - no Phase 2 production implementation starts.
@@ -2026,6 +3365,12 @@ Phase 1 implementation tasks are complete only when Tasks -1 through 10 are inde
 reviewed and every project-owned check passes. If the legal child is still
 `BLOCKED`, Phase 1 gate state remains `BLOCKED`, the phase is not closed, and
 Phase 2 is prohibited.
+
+This execution's immutable governance base does not contain
+`governance/trust/legal-release-authority-v1.pem`, so live G00 cannot become
+`PASS` in this branch. Supplying review files later is insufficient. A future
+authorized base-key addition requires a new protected-main base, new remote
+execution anchor, new Phase 1 branch, and complete rerun/review.
 
 The permission artifact must establish grantor identity/authority, date,
 repository/revision scope, automated-AI permission, adaptation and Apache-2.0

@@ -1,0 +1,5 @@
+schema_version = "phase-01-governance-contract/v1"
+governance_base_commit = "3080b2a11e147bd7aa27f85b2750fdd4cf66ab00"
+governance_base_tree = "11eea823436cea0c31f1ae39c51befe5adb1b952"
+source_branch = "main"
+phase_branch = "agent/phase-01-governance"
