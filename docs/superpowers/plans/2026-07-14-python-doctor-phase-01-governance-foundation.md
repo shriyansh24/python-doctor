@@ -406,6 +406,9 @@ class SkillReleaseManifest:
 class ClauseRegistry:
     clauses: tuple[tuple[str, str, str, str], ...]  # id, path, section, digest
 
+    def resolves(self, clause_id: str) -> bool:
+        return any(item[0] == clause_id for item in self.clauses)
+
 
 @dataclass(frozen=True)
 class ToolchainLock:
@@ -430,6 +433,24 @@ class ReviewEvidence:
 
 
 @dataclass(frozen=True)
+class PublishedAnchorBinding:
+    commit: str
+    tree: str
+    projection_sha256: str
+    reviews_sha256: str
+
+
+@dataclass(frozen=True)
+class PhaseContract:
+    schema_version: str
+    governance_base_commit: str
+    governance_base_tree: str
+    source_branch: str
+    phase_branch: str
+    published_anchor: PublishedAnchorBinding | None
+
+
+@dataclass(frozen=True)
 class GovernanceBundle:
     requirements: tuple[RequirementSpec, ...]
     checks: tuple[GateCheckSpec, ...]
@@ -440,6 +461,7 @@ class GovernanceBundle:
     clauses: ClauseRegistry
     toolchain: ToolchainLock
     validation_inputs: ValidationInputsManifest
+    phase_contract: PhaseContract
     manifest_digests: tuple[tuple[str, str], ...]
     validation_mode: ValidationMode
 
@@ -455,6 +477,10 @@ class SubjectIdentity:
     normative_documents_digest: str
     runner_source_digest: str
     runner_version: str
+    published_anchor_commit: str
+    published_anchor_tree: str
+    published_anchor_projection_sha256: str
+    published_anchor_reviews_sha256: str
     dirty_state_digest: str
     identity_kind: IdentityKind
 
@@ -692,7 +718,8 @@ test "$(git rev-parse 'HEAD^{tree}')" = "$GOVERNANCE_BASE_TREE"
 test -z "$(git status --porcelain=v1)"
 ```
 
-Post-commit acceptance parses the TOML with exactly the five declared keys,
+Immediately after the contract-introduction commit, and only while that commit
+is `HEAD`, post-commit acceptance parses the TOML with exactly the five declared keys,
 checks `HEAD^ == governance_base_commit`, checks
 `governance_base_commit^{tree} == governance_base_tree`, and requires
 `git merge-base --is-ancestor governance_base_commit HEAD`. It also verifies
@@ -706,80 +733,213 @@ git diff --check HEAD^
 test -z "$(git status --porcelain=v1)"
 ```
 
-- [ ] **Step 4: Obtain an independently controlled remote execution anchor**
+- [ ] **Step 4: Freeze the published content-addressed execution anchor**
 
-Before Task 0, an authorized repository/release owner who is not a Phase 1
-implementation author creates
-`refs/heads/agent/phase-01-anchor-2026-07-14` at the exact Task -1 contract
-addition commit. A GitHub ruleset must prevent Phase 1 authors from updating,
-force-updating, or deleting that ref and must apply to administrators. The
-independent owner queries the live ref and effective ruleset through GitHub,
-then signs an offline `github-protected-ref-receipt-v1` payload. Editable
-repository text, a local remote-tracking ref, unsigned JSON, and a self-authored
-`independently_controlled = true` value are not proof of protection.
+Publish all Task -1 changes to PR `shriyansh24/python-doctor#2`. After the final
+Task -1 commit is remotely created, stop editing and fetch its immutable
+projection through the connected GitHub app. The orchestration-owned canonical
+`published-anchor-projection/v1` is a closed JSON object with exactly these
+keys: `schema_version`, `purpose`, `run_id`, `repository_id`, `repository`,
+`pull_request_number`, `base_ref`, `base_sha`, `head_ref`, `head_sha`,
+`head_parent_sha`, `head_tree_sha`, `commit_url`,
+`contract_introduction_sha`, `contract_introduction_tree_sha`,
+`contract_introduction_blob_sha`, `captured_at`,
+`changed_file_count`, `head_commit_object_sha256`,
+`head_tree_object_sha256`, `contract_introduction_commit_object_sha256`,
+`contract_introduction_tree_object_sha256`,
+`governance_base_commit_object_sha256`,
+`governance_base_tree_object_sha256`, and `files`. The fixed non-derived values
+are `schema_version = "published-anchor-projection/v1"`,
+`purpose = "phase-01-governance-input"`,
+`run_id = "phase-01-governance-2026-07-14"`, `repository_id = 1300970386`,
+`repository = "shriyansh24/python-doctor"`, `pull_request_number = 2`,
+`base_ref = "main"`, and `head_ref = "agent/phase-01-governance"`;
+SHA/tree values are lowercase 40-hex Git object
+IDs, `commit_url` is the connector-returned canonical HTTPS URL, and
+`captured_at` is UTC RFC 3339 with `Z` and whole seconds.
 
-The receipt binds exact schema and purpose, repository
-`shriyansh24/python-doctor`, ref name, anchor commit, base commit, contract blob
-SHA-256, ruleset ID and canonical rules projection SHA-256, signer identity,
-verification timestamp, expiry timestamp, and booleans proving force-update,
-deletion, and direct Phase 1 author updates are denied and administrators are
-covered. It is canonical closed JSON with duplicate/unknown-key rejection and
-the signature domain prefix
-`python-doctor/github-protected-ref-receipt/v1\0`. It expires after at most 24
-hours and must be current when Task 0 starts; wrong repository/ref/commit/base/
-blob/rules/purpose/signer, future or expired time, noncanonical bytes, or a bad
-signature is `FAIL`.
+`files` is an array of closed objects with exactly `status`, `old_path`,
+`new_path`, `mode`, `blob_sha`, `raw_sha256`, and `byte_size`. `status` is one
+of `added`, `modified`, or `removed`; rename detection is disabled and a rename
+is represented as one removed plus one added entry. `old_path` is the base path
+only when removed and otherwise JSON `null`; `new_path` is the head path for
+added/modified and JSON `null` when removed. `mode` is the six-digit head Git
+mode, or the base-tree mode when removed. `blob_sha` is the lowercase 40-hex Git object ID at
+the head (JSON `null` when removed), `raw_sha256` is the lowercase 64-hex digest
+of head bytes (JSON `null` when removed), and `byte_size` is a non-negative
+integer (JSON `null` when removed). Phase 1 Task -1 accepts only regular-file
+mode `100644`; a symlink, executable, submodule/gitlink, directory entry,
+non-blob entry, or non-UTF-8 path is `FAIL`. Paths must already be Unicode NFC,
+contain neither NUL nor `..` components, and are sorted by their UTF-8 byte
+sequence on `(new_path or "", old_path or "")`. The complete file set must
+equal both the connector's fully paginated `list_pr_changed_filenames` result
+and `git diff --name-status -z --no-renames <base>..<head>` after comparing the
+union of non-null old/new paths. The connector wrapper
+guarantees complete pagination; an error, truncation indication, duplicate
+path, or count mismatch is `BLOCKED` before capture and `FAIL` after capture.
 
-Receipt production and verification belong to a trusted external facility named
-`github-protected-anchor`, not to any repository script or caller-selected
-executable. The facility runs in an independently attested immutable execution
-environment, authenticates to GitHub with read-only ref/ruleset access, pins its
-GitHub API and cryptographic toolchain identities, and signs the canonical
-provider result with a platform-managed key unavailable to Phase authors. Its
-result binds the receipt fields above, provider/environment/toolchain identity,
-query time, expiry, subject commit/tree, and facility schema version. The
-orchestrator verifies the provider signature and freshness before dispatching
-Task 0; a Phase process never queries GitHub, selects a trust key, verifies its
-own provider result, or promotes a cached/local JSON file.
+The head commit must have exactly one parent. `contract_introduction_blob_sha`
+is the Git blob ID at the exact contract path and must equal the final head's
+blob at that path; the contract file entry is `added`, mode `100644`, and
+byte-identical from introduction through anchor. The projection additionally has
+six lowercase 64-hex fields: `head_commit_object_sha256`,
+`head_tree_object_sha256`, `contract_introduction_commit_object_sha256`,
+`contract_introduction_tree_object_sha256`, `governance_base_commit_object_sha256`,
+and `governance_base_tree_object_sha256`. Each is SHA-256 of the canonical Git
+object bytes `type + SP + decimal-size + NUL + payload`, independently rebuilt
+with `git cat-file --batch`. These fields are part of the closed top-level key
+set above. `repository_id` and repository/ref strings must exactly match the
+fixed values; refs contain only the stated ASCII strings. Capture time comes
+from the orchestration host UTC clock and is informational, not an authority or
+freshness proof.
 
-The orchestration-owned interface is
-`TrustedFacilityAccessor.get_pass("github-protected-anchor",
-required_projection) -> TrustedExternalFacilityResult`. `get_pass` returns only
-a fresh authenticated `PASS`; it raises typed `ExternalFacilityBlocked` or
-`ExternalFacilityFailed` for the states below. Repository modules cannot import,
-construct, deserialize, or shadow the opaque accessor/result capability.
-`TrustedExternalFacilityResult` freezes `facility_id`, `provider_instance_id`,
-`provider_attestation_digest`, `schema_version`, `repository`, `ref`,
-`anchor_commit`, `base_commit`, `contract_blob_sha256`, `ruleset_id`,
-`rules_projection_sha256`, `force_update_denied`, `deletion_denied`,
-`phase_author_update_denied`, `administrators_covered`, `queried_at`,
-`expires_at`, and `signed_result_digest`. Trust comes from the platform-verified
-capability envelope, never from a boolean field inside repository data.
+Projection validation additionally requires `base_sha` to equal the contract's
+`governance_base_commit`, that commit's tree to equal
+`governance_base_tree`, and `head_sha` to equal both the connector PR head and
+the connector-fetched commit. `head_parent_sha` is its sole parent and equals
+`contract_introduction_sha`; that introduction SHA is the unique contract-path
+addition commit, its parent is `base_sha`, its tree is the projected
+introduction tree, and its contract blob parses to exactly the historical
+five-key bootstrap contract. The final head contains that same contract blob.
+Any inequality is `FAIL`.
 
-Provider result state is exact: absent facility, unavailable GitHub authority,
-or absent ref/ruleset evidence is `BLOCKED`; malformed, mismatched, stale,
-forged, unprotected, or noncanonical evidence is `FAIL`; only a fresh valid
-provider result is `PASS`. Task 2 receives the already authenticated typed
-provider result through the orchestration control plane and binds its digest to
-the candidate `CheckResult`; it does not load a path, invoke a local verifier,
-or accept `independently_controlled` from repository data. Every later identity
-check requires the same provider-result digest or a newer fresh result with the
-same stable projection.
+Canonical JSON follows RFC 8785 JSON Canonicalization Scheme for the closed
+object, with the additional invariant that the serialized UTF-8 bytes end in
+exactly one LF; no BOM is permitted. Integers stay in the I-JSON safe range and
+duplicate keys, floats, surrogate code points, and Unicode normalization by the
+serializer are forbidden. `projection_sha256` is the SHA-256 of those canonical
+bytes and is stored outside the subject commit. The remote head commit, not the
+movable branch name or mutable PR prose, is `PHASE_01_PUBLISHED_ANCHOR_SHA`.
 
-The currently available GitHub connection can read/write refs but exposes no
-ruleset query and no independently attested provider-result signature. Therefore
-the `github-protected-anchor` facility is unavailable in this execution: Task -1
-is `BLOCKED` and Task 0 must not begin. A future environment may proceed only
-after that external facility is provisioned and independently reviewed; local
-PATH pinning, repository keys, or self-authored bootstrap code are not accepted
-as substitutes.
+The amendment that defines this procedure is intentionally a second reviewed
+Task -1 commit. `CONTRACT_INTRODUCTION_SHA` remains the unique earlier commit
+that added the five-field contract and whose parent is `GOVERNANCE_BASE_SHA`;
+the final published anchor must descend from it and may not alter the contract's
+immutable projection.
 
-Task 2 and every later identity check compare the immutable five-field
-projection and contract-introduction commit to the authenticated external
-provider result, not merely to the current local history. Rewriting or replaying local
-commits cannot substitute a new base. A deliberate later execution from a newer protected
-`main` requires a newly named anchor, a new Phase 1 branch, and fresh execution
-and review; it is not a continuation of this run.
+After publication, run the following exact handoff from the repository's main
+working tree. The authoring worktree must be clean. Preserve its locally
+recreated branch under `archive/phase-01-governance-local-<short-sha>`, remove
+only that clean worktree registration, fetch without force, and create the
+execution worktree from the connector-reported remote commit. Never delete the
+archival branch.
+
+```bash
+set -eu
+AUTHORING_WORKTREE=.worktrees/phase-01-governance
+EXECUTION_WORKTREE=.worktrees/phase-01-execution
+test -z "$(git -C "$AUTHORING_WORKTREE" status --porcelain=v1)"
+LOCAL_SHORT=$(git -C "$AUTHORING_WORKTREE" rev-parse --short=12 HEAD)
+git -C "$AUTHORING_WORKTREE" branch -m "archive/phase-01-governance-local-$LOCAL_SHORT"
+git worktree remove "$AUTHORING_WORKTREE"
+git fetch origin refs/heads/agent/phase-01-governance:refs/remotes/origin/agent/phase-01-governance
+test "$(git rev-parse refs/remotes/origin/agent/phase-01-governance)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+git worktree add -b agent/phase-01-governance "$EXECUTION_WORKTREE" "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+git -C "$EXECUTION_WORKTREE" branch --set-upstream-to=origin/agent/phase-01-governance
+```
+
+This preserves the five-field contract's branch identity while ensuring
+execution starts from GitHub's actual commit rather than a locally predicted
+equivalent. In the execution worktree verify:
+
+```bash
+set -eu
+test -n "${PHASE_01_PUBLISHED_ANCHOR_SHA:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_TREE:-}"
+test -n "${PHASE_01_PUBLISHED_ANCHOR_PARENT:-}"
+test -n "${GOVERNANCE_BASE_SHA:-}"
+test -n "${CONTRACT_INTRODUCTION_SHA:-}"
+test -n "${CONTRACT_INTRODUCTION_TREE:-}"
+test -n "${CONTRACT_INTRODUCTION_BLOB:-}"
+test "$(git rev-parse HEAD)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git branch --show-current)" = "agent/phase-01-governance"
+test "$(git rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git rev-parse refs/remotes/origin/agent/phase-01-governance)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git rev-parse 'HEAD^{tree}')" = "$PHASE_01_PUBLISHED_ANCHOR_TREE"
+test "$(git rev-parse 'HEAD^')" = "$PHASE_01_PUBLISHED_ANCHOR_PARENT"
+test "$PHASE_01_PUBLISHED_ANCHOR_PARENT" = "$CONTRACT_INTRODUCTION_SHA"
+test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 2
+test "$(git merge-base "$GOVERNANCE_BASE_SHA" HEAD)" = "$GOVERNANCE_BASE_SHA"
+test "$(git rev-parse "$CONTRACT_INTRODUCTION_SHA^")" = "$GOVERNANCE_BASE_SHA"
+test "$(git rev-parse "$CONTRACT_INTRODUCTION_SHA^{tree}")" = "$CONTRACT_INTRODUCTION_TREE"
+test "$(git rev-parse "$CONTRACT_INTRODUCTION_SHA:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+test "$(git rev-parse "HEAD:docs/evidence/contracts/phase-01-governance.toml")" = "$CONTRACT_INTRODUCTION_BLOB"
+git merge-base --is-ancestor "$CONTRACT_INTRODUCTION_SHA" HEAD
+test "$(git diff-tree --no-commit-id --name-only -r "$CONTRACT_INTRODUCTION_SHA" | wc -l)" -eq 2
+git diff-tree --no-commit-id --name-only -r "$CONTRACT_INTRODUCTION_SHA" | grep -Fx "docs/evidence/contracts/phase-01-governance.toml"
+git diff-tree --no-commit-id --name-only -r "$CONTRACT_INTRODUCTION_SHA" | grep -Fx "docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"
+test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = "docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"
+test -z "$(git submodule status)"
+test -z "$(git status --porcelain=v1)"
+```
+
+The orchestrator supplies those variables from the canonical projection, not
+from repository text. `PHASE_01_EXTERNAL_EVIDENCE_ROOT` is an absolute,
+orchestration-owned directory whose resolved path must be outside every Git
+worktree. It contains `published-anchor-projection.json`,
+`author-inventory.json`, and `published-anchor-reviews.json`; no Task -1
+external artifact is written below a repository root. `author-inventory.json`
+is closed schema `published-anchor-authors/v1` with exactly `schema_version`,
+`run_id`, `author_task_paths`, and `mutation_events`. `author_task_paths` is a
+sorted duplicate-free array containing `/root` plus every agent task that
+edited Task -1. `mutation_events` is a chronological array of closed objects
+with exactly `event_kind`, `actor_id`, `operation`, `input_identity`, and
+`result_identity`; all five are strings. `event_kind` is `local` or `github`.
+For `local`, `actor_id` is a collaboration task path, `operation` is one of
+`apply_patch` or `git_commit`, and input/result identities are one lowercase
+SHA-256 file digest or 40-hex Git tree/commit ID per event. For `github`,
+`actor_id` is exactly `60398680`, `operation` is one of `create_blob`,
+`create_tree`, `create_commit`, or `update_ref`, and input/result identities are
+one lowercase Git object/ref-target SHA per event. Multiple results require
+multiple chronological events; no arrays, nested objects, empty strings, or
+unlisted values are accepted. It uses the same
+canonical bytes and its SHA-256 is bound by the review transcript. Two distinct
+review agents independently compare the projection with the fresh local Git
+objects, contract, and author inventory.
+
+This is explicitly a session-scoped procedural checkpoint, not a cryptographic
+receipt, trusted timestamp, or replay-resistant capability. The available
+platform exposes authenticated collaboration task identities and result
+messages but no receipt issuer/verifier API. The closed review transcript has
+exactly `schema_version`, `run_id`, `projection_sha256`, `anchor_sha`,
+`anchor_tree`, `author_inventory_sha256`, and `reviews`; its first two values
+are `published-anchor-reviews/v1` and the projection run ID. `reviews` contains
+exactly two objects, each with exactly `task_path`, `role`, `verdict`,
+`result_text`, and `completed_at`. Roles are exactly one `specification` and one
+`adversarial`; verdict is exactly uppercase `PASS`. `result_text` is the exact
+Unicode collaboration payload delivered to root, with no newline added,
+removed, or normalized.
+Timestamps use the same informational UTC grammar and canonical JSON uses the
+same RFC 8785-plus-one-LF bytes as the projection. Each entry records the actual
+collaboration result rather than rewritten review prose. Review task paths
+must be distinct, absent from the author inventory, have made no filesystem or
+GitHub mutations, and return `PASS` over the same projection.
+
+Immediately before and after each reviewer runs, root records and compares
+subject `HEAD`, tree, branch/upstream SHA, porcelain-v1 status bytes, projection
+digest, and author-inventory digest. Any observable mutation is `FAIL`; because
+the platform exposes no reviewer tool-call audit API, this procedural check
+does not claim detection of a perfectly reverted hidden mutation. The root
+orchestrator consumes the actual collaboration results in the current session,
+writes the transcript exactly once, recomputes all three external-file digests, and sets
+the in-memory `PublishedAnchorCheckpoint` only after all comparisons pass.
+There is deliberately no repository constructor or verifier for this
+checkpoint. Task 0 may be dispatched only in that same live session and its
+separate session dispatch record binds all three external-file SHA-256 values.
+The sealed Task -1 files are never mutated. If the session or
+any external file is lost, moved, or changed, rerun both reviews; do not
+reconstruct approval from repository strings. A mismatch, missing object,
+wrong repository/PR, substituted commit, dirty worktree, incomplete file set,
+or self-review is `FAIL`; GitHub/reviewer unavailability is `BLOCKED`.
+
+Branch movement after capture cannot mutate the content-addressed commit/tree.
+Every later orchestration identity check binds the checkpoint's projection and
+review-transcript digests as immutable execution inputs. Tasks 0–10 necessarily
+create new candidate commits; those use the
+separate candidate `SubjectIdentity` and do not re-anchor Task -1. A change to
+the Task -1 control inputs or their ancestry invalidates the checkpoint and requires
+fresh publication/review. Protected refs remain optional release hardening, not
+a prerequisite for governance Task 0.
 
 ---
 
@@ -802,6 +962,37 @@ and review; it is not a continuation of this run.
 - Create: `scripts/governance/__init__.py`
 - Create: `scripts/governance/validate_oracles.py`
 - Create: `tests/test_governance_oracles.py`
+
+- [ ] **Step 0: Consume the live Task -1 checkpoint**
+
+Before dispatching any Task 0 author, the root orchestrator confirms the
+in-memory `PublishedAnchorCheckpoint` still exists, recomputes all three external
+file digests, rechecks `HEAD`, tree, upstream, ancestry, and cleanliness, and
+writes a separate `task-00-dispatch.json` beside the sealed files. That closed
+session record binds schema `task-dispatch/v1`, task ID `0`, the three sealed
+digests, anchor SHA/tree, author collaboration task path, and UTC dispatch time;
+it never modifies a Task -1 file. The Task 0 author receives the immutable
+control-document paths and anchor SHA, never mutable PR prose. Run in the
+execution worktree:
+
+```bash
+set -eu
+test -n "${PUBLISHED_ANCHOR_PROJECTION_SHA256:-}"
+test -n "${PUBLISHED_ANCHOR_AUTHORS_SHA256:-}"
+test -n "${PUBLISHED_ANCHOR_REVIEWS_SHA256:-}"
+test "${PHASE_01_EXTERNAL_EVIDENCE_ROOT#/}" != "$PHASE_01_EXTERNAL_EVIDENCE_ROOT"
+EVIDENCE_ROOT=$(realpath "$PHASE_01_EXTERNAL_EVIDENCE_ROOT")
+python -c 'import os,pathlib,subprocess; e=pathlib.Path(os.environ["PHASE_01_EXTERNAL_EVIDENCE_ROOT"]).resolve(strict=True); raw=subprocess.check_output(["git","worktree","list","--porcelain","-z"]); roots=[pathlib.Path(x[9:].decode("utf-8","strict")).resolve(strict=True) for x in raw.split(b"\0") if x.startswith(b"worktree ")]; common=pathlib.Path(subprocess.check_output(["git","rev-parse","--path-format=absolute","--git-common-dir"],text=True).strip()).resolve(strict=True); assert roots and all(e != root and root not in e.parents for root in roots); assert e != common and common not in e.parents'
+test "$(sha256sum "$EVIDENCE_ROOT/published-anchor-projection.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_PROJECTION_SHA256"
+test "$(sha256sum "$EVIDENCE_ROOT/author-inventory.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_AUTHORS_SHA256"
+test "$(sha256sum "$EVIDENCE_ROOT/published-anchor-reviews.json" | cut -d' ' -f1)" = "$PUBLISHED_ANCHOR_REVIEWS_SHA256"
+test "$(git rev-parse HEAD)" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test "$(git rev-parse '@{upstream}')" = "$PHASE_01_PUBLISHED_ANCHOR_SHA"
+test -z "$(git status --porcelain=v1)"
+```
+
+An absent in-memory checkpoint, changed digest, or changed identity is not
+recoverable from repository text: rerun Task -1 capture and both reviews.
 
 - [ ] **Step 1: Write and prove the RED oracle validator**
 
@@ -862,8 +1053,16 @@ implementer may not approve their corresponding oracle.
 
 **Interfaces:**
 
-- Produces: `GateState`, `RequirementSpec`, `GateCheckSpec`, `GovernanceBundle`,
-  `Violation`, `load_governance()`, and `validate_governance()`.
+- Produces: every model in **Stable interfaces**, including
+  `PublishedAnchorBinding` and `PhaseContract`; `Violation`;
+  `load_governance()`; `validate_governance()`;
+  `load_requirements(path: Path) -> tuple[RequirementSpec, ...]`;
+  `load_clause_registry(path: Path) -> ClauseRegistry`;
+  `load_phase_contract(path: Path, *, expected_stage:
+  Literal["bootstrap", "anchor-bound"]) -> PhaseContract`; and
+  `bootstrap_projection(contract: PhaseContract) -> tuple[str, str, str, str,
+  str]`. Task 1 unit tests use temporary synthetic v1/v2 files so both closed
+  stage parsers exist before Task 2 populates the repository's v2 contract.
 - Consumes: only Python standard library and the existing `tomli` compatibility
   dependency.
 
@@ -986,65 +1185,153 @@ git commit -m "feat(governance): add strict manifest contracts"
 - Consume without editing: `tests/fixtures/governance/expected-requirement-ids.txt`
 - Modify without changing the Task -1 base binding:
   `docs/evidence/contracts/phase-01-governance.toml`
+- Modify: `tests/governance_helpers.py` with pure local Git-history validation;
+  it has no GitHub client, checkpoint constructor, or external-evidence parser.
 
 **Interfaces:**
 
-- Consumes: `load_governance()` and `validate_governance()`.
+- Consumes: `load_governance()`, `validate_governance()`, and four inert values
+  exported by the current live `PublishedAnchorCheckpoint`: published anchor
+  commit/tree plus projection/review-transcript SHA-256.
 - Produces: canonical `RequirementSpec` records referenced by every task/gate.
+- Uses the Task 1 phase-contract types/loaders. Bootstrap mode accepts only the
+  five-key v1 document; anchor-bound mode accepts only the v2 root/table shape
+  below.
+- Adds test-only `unique_addition_commit(path: str) -> str`,
+  `load_phase_contract_from_git(commit: str, path: str) -> PhaseContract`,
+  `commit_parent(commit: str) -> str`, `git_tree(commit: str) -> str`, and
+  `is_ancestor(ancestor: str, descendant: str) -> bool` in
+  `tests/governance_helpers.py`; every Git call uses fixed argv, disables
+  hooks/config/external diff, and rejects ambiguous or multi-parent results.
 
 - [ ] **Step 1: Write the failing completeness validator**
 
 ```python
-def test_manifest_matches_independently_frozen_id_set() -> None:
-    requirements = load_requirements(ROOT / "governance/requirements.toml")
-    lines = (ROOT / "tests/fixtures/governance/expected-requirement-ids.txt").read_text(encoding="utf-8").splitlines()
-    assert len(lines) == len(set(lines)) == 105
-    assert all(line and not line.startswith("#") for line in lines)
-    expected = frozenset(lines)
-    assert {item.requirement_id for item in requirements} == expected
+import unittest
 
-def test_requirement_state_is_derived_not_authored() -> None:
-    requirements = load_requirements(ROOT / "governance/requirements.toml")
-    assert all(not hasattr(item, "release_status") for item in requirements)
-    assert all(not hasattr(item, "current_phase_status") for item in requirements)
+from scripts.gates.loader import (
+    bootstrap_projection,
+    load_clause_registry,
+    load_phase_contract,
+    load_requirements,
+)
+from tests.governance_helpers import (
+    ROOT,
+    commit_parent,
+    git_tree,
+    is_ancestor,
+    load_phase_contract_from_git,
+    unique_addition_commit,
+)
 
-def test_every_source_clause_resolves_to_frozen_digest() -> None:
-    requirements = load_requirements(ROOT / "governance/requirements.toml")
-    registry = load_clause_registry(ROOT / "governance/clause-registry.toml")
-    assert all(registry.resolves(clause) for item in requirements for clause in item.source_clauses)
 
-def test_task_minus_one_base_binding_is_immutable() -> None:
-    contract = load_phase_contract(ROOT / "docs/evidence/contracts/phase-01-governance.toml")
-    introduction = unique_addition_commit("docs/evidence/contracts/phase-01-governance.toml")
-    anchor = SyntheticAnchorProjection(
-        state="PASS",
-        ref="refs/heads/agent/phase-01-anchor-2026-07-14",
-        anchor_commit=introduction,
-        force_update_denied=True,
-        deletion_denied=True,
-        phase_author_update_denied=True,
-        administrators_covered=True,
-    )
-    assert validate_anchor_projection(anchor) == ()
-    original = load_phase_contract_from_git(introduction)
-    assert immutable_base_projection(contract) == immutable_base_projection(original)
-    assert commit_parent(introduction) == contract.governance_base_commit
-    assert git_tree(contract.governance_base_commit) == contract.governance_base_tree
-    assert is_ancestor(contract.governance_base_commit, "HEAD")
+class TestRequirementsManifest(unittest.TestCase):
+    def test_manifest_matches_independently_frozen_id_set(self) -> None:
+        requirements = load_requirements(ROOT / "governance/requirements.toml")
+        lines = (ROOT / "tests/fixtures/governance/expected-requirement-ids.txt").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        self.assertEqual(len(lines), 105)
+        self.assertEqual(len(lines), len(set(lines)))
+        self.assertTrue(all(line and not line.startswith("#") for line in lines))
+        self.assertEqual(
+            {item.requirement_id for item in requirements}, frozenset(lines)
+        )
+
+    def test_requirement_state_is_derived_not_authored(self) -> None:
+        requirements = load_requirements(ROOT / "governance/requirements.toml")
+        self.assertTrue(all(not hasattr(item, "release_status") for item in requirements))
+        self.assertTrue(
+            all(not hasattr(item, "current_phase_status") for item in requirements)
+        )
+
+    def test_every_source_clause_resolves_to_frozen_digest(self) -> None:
+        requirements = load_requirements(ROOT / "governance/requirements.toml")
+        registry = load_clause_registry(ROOT / "governance/clause-registry.toml")
+        self.assertTrue(
+            all(
+                registry.resolves(clause)
+                for item in requirements
+                for clause in item.source_clauses
+            )
+        )
+
+    def test_task_minus_one_base_binding_is_immutable(self) -> None:
+        contract = load_phase_contract(
+            ROOT / "docs/evidence/contracts/phase-01-governance.toml",
+            expected_stage="anchor-bound",
+        )
+        introduction = unique_addition_commit(
+            "docs/evidence/contracts/phase-01-governance.toml"
+        )
+        original = load_phase_contract_from_git(
+            introduction, "docs/evidence/contracts/phase-01-governance.toml"
+        )
+        self.assertEqual(
+            bootstrap_projection(contract), bootstrap_projection(original)
+        )
+        self.assertEqual(commit_parent(introduction), contract.governance_base_commit)
+        self.assertEqual(
+            git_tree(contract.governance_base_commit), contract.governance_base_tree
+        )
+        self.assertIsNotNone(contract.published_anchor)
+        anchor = contract.published_anchor
+        assert anchor is not None
+        self.assertTrue(is_ancestor(introduction, anchor.commit))
+        self.assertTrue(is_ancestor(anchor.commit, "HEAD"))
+        self.assertEqual(
+            git_tree(anchor.commit), anchor.tree
+        )
+        self.assertRegex(anchor.projection_sha256, r"^[0-9a-f]{64}$")
+        self.assertRegex(anchor.reviews_sha256, r"^[0-9a-f]{64}$")
 ```
 
-`SyntheticAnchorProjection` is test-only and exercises pure field validation;
-it is deliberately incapable of satisfying the live trust gate. The live
-`get_pass` call is an orchestration precondition outside ordinary unittest
-discovery and must already have succeeded before Task 0 was dispatched. Task 2
-binds the orchestrator-provided result digest during evidence assembly but does
-not fetch or manufacture the capability in repository tests.
+The live `PublishedAnchorCheckpoint` remains a session orchestration
+precondition and is never synthesized in repository tests. Task 2 migrates the
+bootstrap contract to this exact closed schema:
+
+```toml
+schema_version = "phase-01-governance-contract/v2"
+governance_base_commit = "<unchanged-40-hex>"
+governance_base_tree = "<unchanged-40-hex>"
+source_branch = "main"
+phase_branch = "agent/phase-01-governance"
+
+[published_anchor]
+commit = "<checkpoint-anchor-40-hex>"
+tree = "<checkpoint-tree-40-hex>"
+projection_sha256 = "<checkpoint-projection-64-hex>"
+reviews_sha256 = "<checkpoint-review-transcript-64-hex>"
+```
+
+The v2 root has exactly the six keys shown and the table has exactly four; all
+unknown keys, wrong types, uppercase hex, and alternate stage/version shapes
+fail. `bootstrap_projection(v2)` returns a five-tuple whose first value is the
+historical constant `phase-01-governance-contract/v1` and whose remaining four
+values come from the unchanged base/branch fields, allowing exact comparison
+with the unique historical v1 blob.
+
+Immediately before accepting the Task 2 commit, the live root orchestrator
+compares all four table values with its in-memory checkpoint, recomputes the
+projection, review, and author-inventory digests, proves
+`introduction -> anchor -> candidate` ancestry,
+and writes a separate immutable `task-02-acceptance.json` session record with
+the candidate SHA/tree and three sealed input digests. Repeat that
+orchestration check before every later task dispatch and final evidence
+assembly; losing the session checkpoint requires fresh reviews. The unit test
+proves only the repository's network-free half: the original five-value
+bootstrap projection is preserved, the introduction parent/tree are intact,
+the fixed published anchor is an ancestor with the recorded tree, and both
+contract-recorded external digests are well-formed. Plausible repository-authored digest strings
+cannot satisfy the separate live checkpoint comparison.
 
 - [ ] **Step 2: Verify the validator fails because the manifest is absent**
 
 Run: `PYTHONPATH=src:. python -m unittest tests.test_requirements_manifest -v`
 
-Expected: missing `governance/requirements.toml`.
+Expected: deliberate failures for the missing requirements/clause manifests
+and the not-yet-migrated anchor-bound v2 contract; no import, collection, or
+undefined-name error.
 
 - [ ] **Step 3: Populate every approved requirement**
 
@@ -1098,7 +1385,8 @@ separately reviewed `expected-gate-clauses.toml` was created and frozen in
 Task 0. This task consumes and validates it without editing it, before the
 executable gate catalog, and it cannot be derived from `gates.toml`.
 
-`validation-inputs.toml` is the sole versioned identity inventory. It lists the
+`validation-inputs.toml` is the sole versioned repository-input identity
+inventory. It lists the
 master prompt, primary specification, validation gates, proof architecture,
 traceability index, this Phase 1 task contract, root instructions, every
 normative governance manifest, every governance schema, every independently
@@ -1117,14 +1405,17 @@ Bootstrap uses `load_requirements(path)` rather than the all-manifest
 final strict loading activates only after every validation input exists in Task
 10.
 
-The base-binding validator reads the contract's unique Git addition commit,
-requires exact equality with the live independently controlled protected anchor,
-and compares the current five-field immutable projection to that anchored blob.
-It rejects multiple addition commits, an absent/unprotected/movable anchor, a
-non-base parent, a changed base commit or tree, a base/tree mismatch, missing
-ancestry, or a rewritten/replayed local history. Hashing only the current
-editable contract is insufficient and must never be used as the immutability
-proof. Missing external anchor/ruleset evidence is `BLOCKED`, never `PASS`.
+The repository base-binding validator reads the contract's unique Git addition
+commit and compares the current five-value bootstrap projection to the
+historical blob. It rejects multiple addition commits, a non-base parent, a
+changed base commit or tree, a base/tree mismatch, missing anchor ancestry, or
+rewritten/replayed local history. The orchestration validator independently
+requires exact equality between the four inert checkpoint exports in the
+contract and the live session checkpoint, including the complete reviewed
+GitHub projection and transcript digests. Neither validator can substitute for
+the other. Hashing only the current editable contract is insufficient. GitHub
+unavailability before Task -1 capture is `BLOCKED`; a captured projection or
+checkpoint mismatch is `FAIL`.
 
 - [ ] **Step 4: Verify GREEN and regression**
 
@@ -1140,7 +1431,7 @@ Expected: all tests pass with no missing family, gate, artifact, or test mapping
 - [ ] **Step 5: Commit**
 
 ```bash
-git add governance/clause-registry.toml governance/requirements.toml governance/toolchain.lock.toml governance/validation-inputs.toml tests/test_requirements_manifest.py docs/evidence/contracts/phase-01-governance.toml
+git add governance/clause-registry.toml governance/requirements.toml governance/toolchain.lock.toml governance/validation-inputs.toml tests/test_requirements_manifest.py tests/governance_helpers.py docs/evidence/contracts/phase-01-governance.toml
 git diff --cached --name-only
 git commit -m "docs(governance): freeze requirements traceability"
 ```
@@ -1577,10 +1868,6 @@ def test_only_source_repository_is_currently_authorized() -> None:
     assert destination(manifest, "github-source-branch").repository == "shriyansh24/python-doctor"
     assert destination(manifest, "github-source-branch").ref_pattern == "refs/heads/main"
     assert manifest.development_branch_pattern == r"refs/heads/agent/[a-z0-9][a-z0-9-]{0,62}"
-    anchor = destination(manifest, "github-phase-01-protected-anchor")
-    assert anchor.state == "permitted"
-    assert anchor.ref_pattern == "refs/heads/agent/phase-01-anchor-2026-07-14"
-    assert anchor.purpose == "immutable_phase_01_execution_anchor"
     assert manifest.candidate_branch_pattern == r"refs/heads/candidate/[a-f0-9]{40}"
     assert manifest.unknown_destination_policy == "deny"
     assert destination(manifest, "pypi").state == "not_authorized"
@@ -1616,14 +1903,6 @@ unknown destination kinds deny by default. Freeze `core`, `api`, `cli`,
 `native-rules`, and `reports` as essential for host and target grammar 3.9–3.14
 on Linux/macOS/Windows. Later integrations are `planned` with decision phases
 and cannot support current claims.
-
-Within the agent-ref allowance, add an exact permitted record
-`github-phase-01-protected-anchor` for
-`refs/heads/agent/phase-01-anchor-2026-07-14` with purpose
-`immutable_phase_01_execution_anchor`. It may point only to the verified Task -1
-contract-addition commit, may not be used for releases or artifacts, and is
-valid only with the independently controlled ruleset and signed offline receipt
-specified in Task -1. A similarly named or unprotected ref is denied.
 
 Repository orientation on 2026-07-14 used the connected GitHub app, which
 reported default branch `main` at commit
@@ -1803,6 +2082,26 @@ def test_hostile_filesystem_entries_fail_without_reading() -> None:
     with assert_raises(InvalidCandidate):
         identify_subject(root)
 
+def test_anchor_binding_is_derived_only_from_strict_v2_contract() -> None:
+    root = complete_identity_fixture()
+    identity = identify_subject(root)
+    contract = load_phase_contract(
+        root / "docs/evidence/contracts/phase-01-governance.toml",
+        expected_stage="anchor-bound",
+    )
+    anchor = contract.published_anchor
+    assert anchor is not None
+    assert identity.published_anchor_commit == anchor.commit
+    assert identity.published_anchor_tree == anchor.tree
+    assert identity.published_anchor_projection_sha256 == anchor.projection_sha256
+    assert identity.published_anchor_reviews_sha256 == anchor.reviews_sha256
+
+def test_missing_tampered_or_nonancestor_anchor_binding_is_invalid() -> None:
+    for mutation in ("missing", "wrong-tree", "malformed-digest", "nonancestor"):
+        root = complete_identity_fixture(anchor_mutation=mutation)
+        with assert_raises(InvalidCandidate):
+            identify_subject(root)
+
 def test_redaction_removes_sensitive_values_and_controls() -> None:
     raw = f"{HOME}/repo secret={SECRET}\x1b[31m hostile.py"
     redacted = redact_text(raw, secrets=(SECRET,))
@@ -1830,7 +2129,15 @@ minimal environment. Subject identity derives the runner version from the
 versioned source plus runner-source digest; no caller-supplied version is
 trusted. Its dependency-lock digest covers the versioned toolchain lock bytes;
 observed executable versions/digests belong only to the separate execution-
-environment identity. The validation-input digest is the canonical hash of every
+environment identity. `identify_subject()` loads the strict v2 `PhaseContract`
+itself and accepts no caller-supplied anchor values. It copies all four
+`SubjectIdentity` anchor fields only from `published_anchor`, rejects a missing
+binding, proves the unique contract introduction is an ancestor of the anchor,
+proves the anchor/tree match and anchor ancestry to the candidate, and rejects
+malformed digest syntax or a locally inconsistent tree before returning an
+identity. A syntactically valid but substituted projection/review digest is
+indistinguishable to repository-only code and is rejected only by the live
+orchestration checkpoint comparison. The validation-input digest is the canonical hash of every
 entry named by `validation-inputs.toml`; final identity refuses any missing
 entry. Task 7 uses a complete temporary normative fixture because live Task
 8–10 inputs do not yet exist; bootstrap subjects use
@@ -2184,7 +2491,8 @@ git commit -m "docs(gates): freeze executable release catalog"
 
 - Create: `AGENTS.md`
 - Create: `docs/audits/2026-07-14-phase-01-governance-review-process.md`
-- Update: `docs/evidence/contracts/phase-01-governance.toml`
+- Consume without editing: `docs/evidence/contracts/phase-01-governance.toml`;
+  its v2 anchor binding was frozen in Task 2 and is immutable thereafter.
 - Create: `schemas/governance/review-findings-v1.schema.json`
 - Create: `tests/test_repository_instructions.py`
 
@@ -2249,7 +2557,7 @@ commit. A prose “approved” statement cannot satisfy G19.
 - [ ] **Step 4: Commit the immutable review subject**
 
 ```bash
-git add AGENTS.md schemas/governance/review-findings-v1.schema.json tests/test_repository_instructions.py docs/audits/2026-07-14-phase-01-governance-review-process.md docs/evidence/contracts/phase-01-governance.toml
+git add AGENTS.md schemas/governance/review-findings-v1.schema.json tests/test_repository_instructions.py docs/audits/2026-07-14-phase-01-governance-review-process.md
 git diff --cached --name-only
 git commit -m "docs(review): freeze phase one review contract"
 git status --porcelain=v1
