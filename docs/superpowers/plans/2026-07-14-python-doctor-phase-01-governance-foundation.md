@@ -117,6 +117,7 @@ schemas/governance/
 ├── evidence-index-v1.schema.json
 ├── gate-result-v1.schema.json
 ├── legal-review-v1.schema.json
+├── trust-anchor-receipt-v1.schema.json
 └── review-findings-v1.schema.json
 docs/
 ├── evidence/contracts/phase-01-governance.toml
@@ -132,6 +133,14 @@ Modify:
 ```text
 .gitignore
 AGENTS.md
+docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md
+```
+
+Pre-base trust input, independently reviewed on protected `main` and never
+created or modified by Phase 1 tasks:
+
+```text
+governance/trust/legal-release-authority-v1.pem
 ```
 
 `governance/` is normative. `AGENTS.md` prohibits unreviewed weakening of gates,
@@ -623,6 +632,13 @@ predicates are invalid; every predicate emits a candidate-bound boolean in
 
 **Required sub-skill:** `superpowers:using-git-worktrees`
 
+**Files:**
+
+- Create: `docs/evidence/contracts/phase-01-governance.toml` with only the
+  immutable execution-base binding; Task 2 later extends this same record.
+- Modify: this plan to record the reviewed sequencing and external-anchor
+  acceptance corrections discovered before Task 0.
+
 - [ ] **Step 1: Verify the planning publication base**
 
 Fetch without force or history rewrite. Confirm the connected GitHub app and
@@ -648,10 +664,122 @@ git diff --check origin/main...HEAD
 After the control-document PR is merged, fetch `origin/main`, record that exact
 merge/fast-forward SHA as `GOVERNANCE_BASE_SHA` in the Phase 1 evidence contract,
 and create `agent/phase-01-governance` plus its worktree from that SHA. Before
-Task 0, prove both `HEAD^{tree}` and merge-base match the approved remote state.
-All Task 0–10 review/evidence binds commits in this ancestry. Rebase, cherry-pick,
-replay, or force-push after review invalidates the candidate and requires fresh
-execution/review rather than SHA substitution.
+the first Phase 1 commit, prove `HEAD`, `HEAD^{tree}`, and merge-base match the
+approved remote state. After the contract commit, `HEAD^{tree}` is expected to
+differ because the contract is now part of the subject; prove instead that the
+recorded base is the exact parent and ancestor of `HEAD` and that the recorded
+base tree equals `<base-commit>^{tree}`. All Task 0–10 review/evidence binds
+commits in this ancestry. Rebase, cherry-pick, replay, or force-push after review
+invalidates the candidate and requires fresh execution/review rather than SHA
+substitution.
+
+The Task -1 contract is intentionally minimal and records exactly
+`schema_version`, `governance_base_commit`, `governance_base_tree`,
+`source_branch`, and `phase_branch`. Commit it before Task 0. Task 2 modifies
+this existing record to add the complete evidence contract; it never replaces
+or weakens the frozen base commit/tree.
+
+Immediately after creating the isolated worktree, before creating or editing
+any Phase 1 file, run this pre-edit acceptance block:
+
+```bash
+set -eu
+GOVERNANCE_BASE_SHA=$(git rev-parse origin/main)
+GOVERNANCE_BASE_TREE=$(git rev-parse "$GOVERNANCE_BASE_SHA^{tree}")
+test "$(git rev-parse HEAD)" = "$GOVERNANCE_BASE_SHA"
+test "$(git merge-base origin/main HEAD)" = "$GOVERNANCE_BASE_SHA"
+test "$(git rev-parse 'HEAD^{tree}')" = "$GOVERNANCE_BASE_TREE"
+test -z "$(git status --porcelain=v1)"
+```
+
+Post-commit acceptance parses the TOML with exactly the five declared keys,
+checks `HEAD^ == governance_base_commit`, checks
+`governance_base_commit^{tree} == governance_base_tree`, and requires
+`git merge-base --is-ancestor governance_base_commit HEAD`. It also verifies
+that the contract-addition commit is unique and that its changed-file set is
+limited to the contract plus this separately reviewed sequencing correction.
+
+```bash
+set -eu
+python -c 'import importlib.util,pathlib,subprocess; tomllib=__import__("tomllib" if importlib.util.find_spec("tomllib") else "tomli"); p="docs/evidence/contracts/phase-01-governance.toml"; plan="docs/superpowers/plans/2026-07-14-python-doctor-phase-01-governance-foundation.md"; d=tomllib.loads(pathlib.Path(p).read_text("utf-8")); run=lambda *a: subprocess.check_output(["git",*a],text=True).strip(); require=lambda c,m: c or (_ for _ in ()).throw(SystemExit(m)); keys={"schema_version","governance_base_commit","governance_base_tree","source_branch","phase_branch"}; require(set(d)==keys and all(isinstance(d[k],str) for k in keys),"invalid contract shape"); require(d["schema_version"]=="phase-01-governance-contract/v1" and d["source_branch"]=="main" and d["phase_branch"]==run("branch","--show-current"),"invalid contract identity"); require(run("rev-parse","HEAD^")==d["governance_base_commit"],"wrong base parent"); require(run("rev-parse",d["governance_base_commit"]+"^{tree}")==d["governance_base_tree"],"wrong base tree"); subprocess.run(["git","merge-base","--is-ancestor",d["governance_base_commit"],"HEAD"],check=True); require(run("log","--diff-filter=A","--format=%H","--",p).splitlines()==[run("rev-parse","HEAD")],"non-unique contract introduction"); require(set(run("diff-tree","--no-commit-id","--name-only","-r","HEAD").splitlines())=={p,plan},"invalid Task -1 commit scope")'
+git diff --check HEAD^
+test -z "$(git status --porcelain=v1)"
+```
+
+- [ ] **Step 4: Obtain an independently controlled remote execution anchor**
+
+Before Task 0, an authorized repository/release owner who is not a Phase 1
+implementation author creates
+`refs/heads/agent/phase-01-anchor-2026-07-14` at the exact Task -1 contract
+addition commit. A GitHub ruleset must prevent Phase 1 authors from updating,
+force-updating, or deleting that ref and must apply to administrators. The
+independent owner queries the live ref and effective ruleset through GitHub,
+then signs an offline `github-protected-ref-receipt-v1` payload. Editable
+repository text, a local remote-tracking ref, unsigned JSON, and a self-authored
+`independently_controlled = true` value are not proof of protection.
+
+The receipt binds exact schema and purpose, repository
+`shriyansh24/python-doctor`, ref name, anchor commit, base commit, contract blob
+SHA-256, ruleset ID and canonical rules projection SHA-256, signer identity,
+verification timestamp, expiry timestamp, and booleans proving force-update,
+deletion, and direct Phase 1 author updates are denied and administrators are
+covered. It is canonical closed JSON with duplicate/unknown-key rejection and
+the signature domain prefix
+`python-doctor/github-protected-ref-receipt/v1\0`. It expires after at most 24
+hours and must be current when Task 0 starts; wrong repository/ref/commit/base/
+blob/rules/purpose/signer, future or expired time, noncanonical bytes, or a bad
+signature is `FAIL`.
+
+Receipt production and verification belong to a trusted external facility named
+`github-protected-anchor`, not to any repository script or caller-selected
+executable. The facility runs in an independently attested immutable execution
+environment, authenticates to GitHub with read-only ref/ruleset access, pins its
+GitHub API and cryptographic toolchain identities, and signs the canonical
+provider result with a platform-managed key unavailable to Phase authors. Its
+result binds the receipt fields above, provider/environment/toolchain identity,
+query time, expiry, subject commit/tree, and facility schema version. The
+orchestrator verifies the provider signature and freshness before dispatching
+Task 0; a Phase process never queries GitHub, selects a trust key, verifies its
+own provider result, or promotes a cached/local JSON file.
+
+The orchestration-owned interface is
+`TrustedFacilityAccessor.get_pass("github-protected-anchor",
+required_projection) -> TrustedExternalFacilityResult`. `get_pass` returns only
+a fresh authenticated `PASS`; it raises typed `ExternalFacilityBlocked` or
+`ExternalFacilityFailed` for the states below. Repository modules cannot import,
+construct, deserialize, or shadow the opaque accessor/result capability.
+`TrustedExternalFacilityResult` freezes `facility_id`, `provider_instance_id`,
+`provider_attestation_digest`, `schema_version`, `repository`, `ref`,
+`anchor_commit`, `base_commit`, `contract_blob_sha256`, `ruleset_id`,
+`rules_projection_sha256`, `force_update_denied`, `deletion_denied`,
+`phase_author_update_denied`, `administrators_covered`, `queried_at`,
+`expires_at`, and `signed_result_digest`. Trust comes from the platform-verified
+capability envelope, never from a boolean field inside repository data.
+
+Provider result state is exact: absent facility, unavailable GitHub authority,
+or absent ref/ruleset evidence is `BLOCKED`; malformed, mismatched, stale,
+forged, unprotected, or noncanonical evidence is `FAIL`; only a fresh valid
+provider result is `PASS`. Task 2 receives the already authenticated typed
+provider result through the orchestration control plane and binds its digest to
+the candidate `CheckResult`; it does not load a path, invoke a local verifier,
+or accept `independently_controlled` from repository data. Every later identity
+check requires the same provider-result digest or a newer fresh result with the
+same stable projection.
+
+The currently available GitHub connection can read/write refs but exposes no
+ruleset query and no independently attested provider-result signature. Therefore
+the `github-protected-anchor` facility is unavailable in this execution: Task -1
+is `BLOCKED` and Task 0 must not begin. A future environment may proceed only
+after that external facility is provisioned and independently reviewed; local
+PATH pinning, repository keys, or self-authored bootstrap code are not accepted
+as substitutes.
+
+Task 2 and every later identity check compare the immutable five-field
+projection and contract-introduction commit to the authenticated external
+provider result, not merely to the current local history. Rewriting or replaying local
+commits cannot substitute a new base. A deliberate later execution from a newer protected
+`main` requires a newly named anchor, a new Phase 1 branch, and fresh execution
+and review; it is not a continuation of this run.
 
 ---
 
@@ -856,7 +984,8 @@ git commit -m "feat(governance): add strict manifest contracts"
 - Create: `tests/test_requirements_manifest.py`
 - Consume without editing: `tests/fixtures/governance/expected-gate-clauses.toml`
 - Consume without editing: `tests/fixtures/governance/expected-requirement-ids.txt`
-- Create: `docs/evidence/contracts/phase-01-governance.toml`
+- Modify without changing the Task -1 base binding:
+  `docs/evidence/contracts/phase-01-governance.toml`
 
 **Interfaces:**
 
@@ -883,7 +1012,33 @@ def test_every_source_clause_resolves_to_frozen_digest() -> None:
     requirements = load_requirements(ROOT / "governance/requirements.toml")
     registry = load_clause_registry(ROOT / "governance/clause-registry.toml")
     assert all(registry.resolves(clause) for item in requirements for clause in item.source_clauses)
+
+def test_task_minus_one_base_binding_is_immutable() -> None:
+    contract = load_phase_contract(ROOT / "docs/evidence/contracts/phase-01-governance.toml")
+    introduction = unique_addition_commit("docs/evidence/contracts/phase-01-governance.toml")
+    anchor = SyntheticAnchorProjection(
+        state="PASS",
+        ref="refs/heads/agent/phase-01-anchor-2026-07-14",
+        anchor_commit=introduction,
+        force_update_denied=True,
+        deletion_denied=True,
+        phase_author_update_denied=True,
+        administrators_covered=True,
+    )
+    assert validate_anchor_projection(anchor) == ()
+    original = load_phase_contract_from_git(introduction)
+    assert immutable_base_projection(contract) == immutable_base_projection(original)
+    assert commit_parent(introduction) == contract.governance_base_commit
+    assert git_tree(contract.governance_base_commit) == contract.governance_base_tree
+    assert is_ancestor(contract.governance_base_commit, "HEAD")
 ```
+
+`SyntheticAnchorProjection` is test-only and exercises pure field validation;
+it is deliberately incapable of satisfying the live trust gate. The live
+`get_pass` call is an orchestration precondition outside ordinary unittest
+discovery and must already have succeeded before Task 0 was dispatched. Task 2
+binds the orchestrator-provided result digest during evidence assembly but does
+not fetch or manufacture the capability in repository tests.
 
 - [ ] **Step 2: Verify the validator fails because the manifest is absent**
 
@@ -939,8 +1094,9 @@ clause/requirement records rather than the phrase “complete approved surface.�
 
 `clause-registry.toml` freezes a stable clause ID, source document path, section,
 normalized clause SHA-256, and assertion kind for every normative bullet. The
-separately reviewed `expected-gate-clauses.toml` is created in this task, before
-the executable gate catalog, and cannot be derived from `gates.toml`.
+separately reviewed `expected-gate-clauses.toml` was created and frozen in
+Task 0. This task consumes and validates it without editing it, before the
+executable gate catalog, and it cannot be derived from `gates.toml`.
 
 `validation-inputs.toml` is the sole versioned identity inventory. It lists the
 master prompt, primary specification, validation gates, proof architecture,
@@ -960,6 +1116,15 @@ Bootstrap uses `load_requirements(path)` rather than the all-manifest
 `load_governance()` call. Bootstrap validation is explicitly non-evidentiary;
 final strict loading activates only after every validation input exists in Task
 10.
+
+The base-binding validator reads the contract's unique Git addition commit,
+requires exact equality with the live independently controlled protected anchor,
+and compares the current five-field immutable projection to that anchored blob.
+It rejects multiple addition commits, an absent/unprotected/movable anchor, a
+non-base parent, a changed base commit or tree, a base/tree mismatch, missing
+ancestry, or a rewritten/replayed local history. Hashing only the current
+editable contract is insufficient and must never be used as the immutability
+proof. Missing external anchor/ruleset evidence is `BLOCKED`, never `PASS`.
 
 - [ ] **Step 4: Verify GREEN and regression**
 
@@ -1021,7 +1186,22 @@ def test_rejects_approval_without_authority_and_scope() -> None:
     assert REQUIRED_APPROVAL_FIELDS.issubset(missing_fields(violations))
 
 def test_raw_legal_artifact_is_never_committed() -> None:
-    assert ".evidence/" in (ROOT / ".gitignore").read_text()
+    legal_paths = (
+        ".evidence/legal/permission-message.raw",
+        ".evidence/legal/permission-message.sha256",
+        ".evidence/legal/trusted-review-root.pem",
+        ".evidence/legal/trust-anchor-receipt.json",
+        ".evidence/legal/trust-anchor-receipt.sig",
+        ".evidence/legal/permission-review.json",
+        ".evidence/legal/permission-review.sig",
+    )
+    for path in legal_paths:
+        ignored = subprocess.run(
+            ["git", "check-ignore", "--no-index", "-q", "--", path],
+            cwd=ROOT,
+            check=False,
+        )
+        assert ignored.returncode == 0, path
     tracked = subprocess.run(
         ["git", "ls-files", "-z", ".evidence"],
         cwd=ROOT,
@@ -1177,10 +1357,15 @@ git commit -m "docs(governance): record clean-room provenance controls"
 - Create locally, never commit: `.evidence/legal/permission-message.raw`
 - Create locally, never commit: `.evidence/legal/permission-message.sha256`
 - Obtain externally, never commit: `.evidence/legal/trusted-review-root.pem`
+- Obtain externally, never commit: `.evidence/legal/trust-anchor-receipt.json`
+- Obtain externally, never commit: `.evidence/legal/trust-anchor-receipt.sig`
 - Obtain externally, never commit: `.evidence/legal/permission-review.json`
 - Obtain externally, never commit: `.evidence/legal/permission-review.sig`
+- Consume only from the immutable governance base, never create or modify in
+  Tasks 0–10: `governance/trust/legal-release-authority-v1.pem`
 - Update after authorized review: `governance/provenance.toml`
 - Create: `schemas/governance/legal-review-v1.schema.json`
+- Create: `schemas/governance/trust-anchor-receipt-v1.schema.json`
 - Create: `tests/test_legal_disposition.py`
 
 **Interfaces:**
@@ -1190,9 +1375,27 @@ git commit -m "docs(governance): record clean-room provenance controls"
 - Produces: sanitized provenance metadata only. It never stores message text,
   headers, personal identifiers, or legal correspondence in Git.
 
+**Precondition and blocked-state rule:** Task 4 must not create any
+`.evidence/legal/*` file until Task 3 has committed `.evidence/` to `.gitignore`
+and its tracked-file rejection test passes. Task 4 may implement and test the
+fail-closed derivation mechanics while external review is absent. It must not
+add an approved sanitized disposition, report G00 `PASS`, or treat a user
+assertion as authority until the complete externally rooted signed review is
+present and verifies successfully; otherwise G00 remains `BLOCKED`.
+
 - [ ] **Step 1: Add fail-closed transition tests**
 
 ```python
+LEGAL_EVIDENCE_PATHS = (
+    ".evidence/legal/permission-message.raw",
+    ".evidence/legal/permission-message.sha256",
+    ".evidence/legal/trusted-review-root.pem",
+    ".evidence/legal/trust-anchor-receipt.json",
+    ".evidence/legal/trust-anchor-receipt.sig",
+    ".evidence/legal/permission-review.json",
+    ".evidence/legal/permission-review.sig",
+)
+
 def test_permission_summary_cannot_approve_legal_gate() -> None:
     record = restricted_record(
         artifact_sha256="",
@@ -1202,17 +1405,39 @@ def test_permission_summary_cannot_approve_legal_gate() -> None:
 
 
 def test_signed_fixture_review_can_satisfy_derivation_mechanics() -> None:
-    raw, trust_root, signed_review = signed_legal_fixture()
+    authority_root, trust_root, signed_anchor, raw, signed_review = signed_legal_fixture()
     record = restricted_record(
         artifact_sha256=sha256(raw),
         review_attestation_sha256=sha256(signed_review.json_bytes),
     )
-    assert legal_state(record, raw, verify_review(signed_review, trust_root)) is GateState.PASS
+    anchored_root = verify_trust_anchor(signed_anchor, authority_root)
+    assert legal_state(record, raw, verify_review(signed_review, trust_root, anchored_root)) is GateState.PASS
 
 def test_complete_self_authored_strings_never_pass() -> None:
     raw = b"invented permission"
     record = complete_looking_record(artifact_sha256=sha256(raw))
     assert legal_state(record, raw, trusted_review=None) is GateState.BLOCKED
+
+def test_self_generated_review_root_cannot_substitute_for_base_authority() -> None:
+    attacker = self_generated_legal_bundle()
+    assert verify_trust_anchor(attacker.anchor, governance_base_authority_key()) is None
+    assert legal_state(attacker.record, attacker.raw, trusted_review=None) is GateState.BLOCKED
+
+def test_missing_base_authority_key_is_blocked() -> None:
+    assert live_legal_state(governance_base_without_authority_key()) is GateState.BLOCKED
+
+def test_trust_anchor_receipt_rejects_wrong_semantics() -> None:
+    assert_anchor_rejected(anchor_receipt(purpose="anything-else"))
+    assert_anchor_rejected(anchor_receipt(schema_version="trust-anchor-receipt/v0"))
+    assert_anchor_rejected(anchor_receipt(authority_identity="substitute-authority"))
+    assert_anchor_rejected(anchor_receipt(not_after=VERIFICATION_TIME - 1))
+    assert_anchor_rejected(anchor_receipt(not_before=VERIFICATION_TIME + 1))
+
+def test_trust_anchor_receipt_rejects_noncanonical_or_ambiguous_bytes() -> None:
+    assert_anchor_rejected(anchor_with_duplicate_json_key())
+    assert_anchor_rejected(anchor_with_unknown_key())
+    assert_anchor_rejected(anchor_with_noncanonical_json())
+    assert_anchor_rejected(anchor_signed_under_legal_review_domain())
 ```
 
 - [ ] **Step 2: Verify RED**
@@ -1241,12 +1466,26 @@ grantor identity and authority evidence digest, exact repository/revision,
 AI-use/adaptation/redistribution/material scopes, conditions, attribution,
 reviewer identity/authority basis, decision/date, and review schema version.
 The authorized reviewer signs it with Ed25519. `trusted-review-root.pem` is
-provisioned out of band by the independent release authority; its fingerprint
-is never learned from editable repository metadata. The pinned OpenSSL verifier
-checks the signature and exact canonical bytes. `legal_state()` requires the
-raw digest match and a verified trusted review; complete-looking TOML strings,
-`initial_state`, `approved = true`, or user assertion can produce only
-`BLOCKED`. Record clean-implementer exposure certifications separately.
+provisioned out of band by the independent release authority, but a caller-
+supplied root is never trusted by itself. The independent release authority
+also signs `trust-anchor-receipt.json`, which binds that review-root fingerprint,
+purpose, validity interval, authority identity, and schema version. The receipt
+signature is verified only with
+`governance/trust/legal-release-authority-v1.pem` read byte-for-byte from
+`governance_base_commit`, not from the current worktree, environment, CLI, or
+editable metadata. If that authority key was absent from the immutable base,
+the live legal child is unconditionally `BLOCKED`; introducing it requires a
+separately authorized protected-main change and a complete Phase 1 restart from
+the new governance base. Tasks 0–10 may implement synthetic verification
+mechanics but may not add or replace that key.
+
+The pinned OpenSSL verifier checks both signatures and exact canonical bytes.
+`legal_state()` requires the raw digest match, a review root whose fingerprint
+matches the authority-signed receipt, and a verified trusted review. A locally
+generated root, a caller-provided expected fingerprint, complete-looking TOML
+strings, `initial_state`, `approved = true`, or user assertion can produce only
+`BLOCKED` or `FAIL`, never `PASS`. Record clean-implementer exposure
+certifications separately.
 
 `legal-review-v1` allows closed objects, UTF-8 strings, booleans, arrays, and
 bounded base-10 integers only—no floats. Parsing rejects duplicate keys,
@@ -1256,16 +1495,40 @@ escapes, lowercase literals, compact separators, UTF-8, and exactly one trailing
 newline, prefixed for signature by `python-doctor/legal-review/v1\0`. Parsing
 then reserialization must reproduce the signed bytes exactly.
 
+`trust-anchor-receipt-v1` uses the same closed-object, duplicate-key rejection,
+integer, Unicode, and canonical JSON rules, but signs bytes under the distinct
+domain prefix `python-doctor/trust-anchor-receipt/v1\0`. It requires exactly
+`schema_version = "trust-anchor-receipt/v1"`,
+`purpose = "python-doctor/legal-review-root"`,
+`authority_identity = "python-doctor-independent-release-authority-v1"`, the
+lowercase SHA-256 fingerprint of the review root, and bounded UTC integer
+`not_before`/`not_after` values with `not_before <= verification_time <=
+not_after`. Verification time comes from the gate execution clock, is recorded
+in the evidence ledger, and is not accepted from receipt fields, CLI arguments,
+environment variables, or editable metadata. Wrong schema, purpose, authority
+identity, domain prefix, key fingerprint, validity interval, canonical bytes,
+or signature produces `FAIL`; an absent base authority key or absent external
+receipt remains `BLOCKED`.
+
 The legal check receives only declared read-only external files inside the
 containment backend. Its `CheckResult.external_input_hashes` records raw
-permission, canonical review JSON, and signature SHA-256; it separately records
-the trusted-root fingerprint and verified authority-evidence digest. Any change
-invalidates the check without changing `SubjectIdentity`.
+permission, canonical review JSON, review signature, canonical trust-anchor
+receipt, and receipt signature SHA-256. It separately records the base-loaded
+release-authority key fingerprint, anchored review-root fingerprint, and
+verified authority-evidence digest. Any change invalidates the check without
+changing `SubjectIdentity`.
 
 - [ ] **Step 5: Prove raw material is ignored, not absent**
 
 ```python
 def test_raw_permission_artifact_is_not_tracked() -> None:
+    for path in LEGAL_EVIDENCE_PATHS:
+        ignored = subprocess.run(
+            ["git", "check-ignore", "--no-index", "-q", "--", path],
+            cwd=ROOT,
+            check=False,
+        )
+        assert ignored.returncode == 0, path
     tracked = subprocess.run(
         ["git", "ls-files", "-z", ".evidence"],
         cwd=ROOT,
@@ -1284,7 +1547,7 @@ authorized disposition; otherwise
 `BLOCKED`.
 
 ```bash
-git add governance/provenance.toml schemas/governance/legal-review-v1.schema.json tests/test_legal_disposition.py
+git add governance/provenance.toml schemas/governance/legal-review-v1.schema.json schemas/governance/trust-anchor-receipt-v1.schema.json tests/test_legal_disposition.py
 git diff --cached --name-only
 git commit -m "docs(legal): record restricted-source disposition"
 ```
@@ -1314,6 +1577,10 @@ def test_only_source_repository_is_currently_authorized() -> None:
     assert destination(manifest, "github-source-branch").repository == "shriyansh24/python-doctor"
     assert destination(manifest, "github-source-branch").ref_pattern == "refs/heads/main"
     assert manifest.development_branch_pattern == r"refs/heads/agent/[a-z0-9][a-z0-9-]{0,62}"
+    anchor = destination(manifest, "github-phase-01-protected-anchor")
+    assert anchor.state == "permitted"
+    assert anchor.ref_pattern == "refs/heads/agent/phase-01-anchor-2026-07-14"
+    assert anchor.purpose == "immutable_phase_01_execution_anchor"
     assert manifest.candidate_branch_pattern == r"refs/heads/candidate/[a-f0-9]{40}"
     assert manifest.unknown_destination_policy == "deny"
     assert destination(manifest, "pypi").state == "not_authorized"
@@ -1346,9 +1613,17 @@ record is `main`; agent refs are permitted review staging and candidate refs are
 permitted verification staging, not releases. Mark tags, Releases, Pages, PyPI,
 editor registries, containers, and every other destination `not_authorized`;
 unknown destination kinds deny by default. Freeze `core`, `api`, `cli`,
-`native-rules`, and `reports` as essential
-for host and target grammar 3.9–3.14 on Linux/macOS/Windows. Later integrations
-are `planned` with decision phases and cannot support current claims.
+`native-rules`, and `reports` as essential for host and target grammar 3.9–3.14
+on Linux/macOS/Windows. Later integrations are `planned` with decision phases
+and cannot support current claims.
+
+Within the agent-ref allowance, add an exact permitted record
+`github-phase-01-protected-anchor` for
+`refs/heads/agent/phase-01-anchor-2026-07-14` with purpose
+`immutable_phase_01_execution_anchor`. It may point only to the verified Task -1
+contract-addition commit, may not be used for releases or artifacts, and is
+valid only with the independently controlled ruleset and signed offline receipt
+specified in Task -1. A similarly named or unprotected ref is denied.
 
 Repository orientation on 2026-07-14 used the connected GitHub app, which
 reported default branch `main` at commit
@@ -1783,10 +2058,12 @@ def test_permission_check_is_mandatory_and_state_is_externally_derived() -> None
     assert check.external_prerequisite is True
     assert not hasattr(check, "initial_state")
     assert legal_fixture_state("missing-review") is GateState.BLOCKED
+    assert legal_fixture_state("missing-base-authority-key") is GateState.BLOCKED
+    assert legal_fixture_state("unanchored-review-root") is GateState.FAIL
     assert legal_fixture_state("ambiguous-scope") is GateState.BLOCKED
     assert legal_fixture_state("forged-signature") is GateState.FAIL
-    assert legal_fixture_state("trusted-complete-review") is GateState.PASS
-    assert live_legal_state(ROOT) is trusted_external_state_or_blocked(ROOT)
+    assert legal_fixture_state("base-anchored-complete-review") is GateState.PASS
+    assert live_legal_state(ROOT) is GateState.BLOCKED
 ```
 
 - [ ] **Step 2: Verify RED**
@@ -1809,9 +2086,14 @@ governance checks are scheduled. Later checks remain
 
 `G00-LEGAL-PERMISSION` has no editable state. Its result is derived only from
 the restricted-source record, raw-artifact digest match, complete grant fields,
-clean-implementer certifications, and authorized reviewer disposition. Missing
-or ambiguous external proof yields `BLOCKED`; contradictory or forged project-
-owned metadata yields `FAIL`.
+clean-implementer certifications, the release-authority key read from the
+immutable governance base, a valid authority-signed trust-anchor receipt, an
+exact anchored review-root fingerprint, and the authorized review signature and
+disposition. Missing or ambiguous external proof yields `BLOCKED`;
+contradictory, forged, substituted-root, expired, or noncanonical evidence
+yields `FAIL`. Because this execution's governance base contains no release-
+authority key, its live G00 result is unconditionally `BLOCKED`; synthetic
+fixtures prove mechanics only and cannot make this subject pass.
 
 The frozen child-ID inventory is:
 
@@ -2000,7 +2282,9 @@ Expected:
 - governance configuration is valid;
 - the Phase 1 ledger proves every scheduled child across G00–G20 executed under
   containment or names the exact external blocker; an unexecuted child fails;
-- G00 contributes `BLOCKED` until trusted legal review is supplied;
+- G00 contributes `BLOCKED` for this execution because its immutable governance
+  base lacks the release-authority key; external review files alone cannot
+  change that state;
 - every project-owned Phase 1 check passes; missing legal or containment
   authority remains explicitly `BLOCKED`, never skipped or green;
 - no Phase 2 production implementation starts.
@@ -2026,6 +2310,12 @@ Phase 1 implementation tasks are complete only when Tasks -1 through 10 are inde
 reviewed and every project-owned check passes. If the legal child is still
 `BLOCKED`, Phase 1 gate state remains `BLOCKED`, the phase is not closed, and
 Phase 2 is prohibited.
+
+This execution's immutable governance base does not contain
+`governance/trust/legal-release-authority-v1.pem`, so live G00 cannot become
+`PASS` in this branch. Supplying review files later is insufficient. A future
+authorized base-key addition requires a new protected-main base, new remote
+execution anchor, new Phase 1 branch, and complete rerun/review.
 
 The permission artifact must establish grantor identity/authority, date,
 repository/revision scope, automated-AI permission, adaptation and Apache-2.0
