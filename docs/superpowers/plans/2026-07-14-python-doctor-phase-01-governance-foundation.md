@@ -1761,6 +1761,18 @@ Every suite captures `suite.countTestCases()` before execution and accepts a
 result only when `testsRun` equals that count, `wasSuccessful()` is true, and
 `skipped`, `expectedFailures`, and `unexpectedSuccesses` are all empty. Each
 mandatory single-test suite must additionally have a pre-run count of one.
+The full suite is bound to an embedded exact inventory of fully qualified test
+IDs: 52 on the current non-Windows Task 0 subject and 49 on Windows, where four
+POSIX-only tests are absent and the mandatory native-junction test is present.
+Discovery order, IDs, and cardinality must match exactly before any test runs.
+The ASCII-LF inventories are content-addressed as
+`0dc6c93343d96463783a39c6ac91aab399a10411c496a923eb70a8b41f145078`
+for non-Windows and
+`c5845af178802905e0c02a2ccdc79a188cf5cd42cfd8020fb5824907177f4adc`
+for Windows.
+Task 0 extends existing inventory-preserving regression methods for new hostile
+cases; it does not add, delete, or rename a test method unless this independent
+control and both platform inventories are amended first.
 
 Every trusted Task 0 Python process—checkpoint acceptance, workflow supervisor,
 local supervisor, every supervised child, and `compileall`—starts with the
@@ -1773,6 +1785,12 @@ contained, every component is a directory, and no component is a symlink or an
 observed Windows reparse point. A bounded recursive before/after snapshot
 rejects non-regular files, symlink/reparse descendants, identity changes, and
 persistent mutation of any Python file in those roots during a stage.
+The same bounded, descriptor-read, no-follow snapshot explicitly enumerates
+every Task 0 artifact: the Windows workflow, exact Task 0 audit, three script
+files, test module, and six governance fixtures. Entries already covered by a
+watched root are identity/digest compared rather than silently skipped. Thus
+the workflow and audit are protected even though neither is below `tests`,
+`scripts`, or `src/python_doctor`.
 
 Every repository-controlled stage runs in its own new
 `python -I -B -X utf8 -S` child. Before repository import, the child reduces
@@ -1833,6 +1851,11 @@ promised baseline stored import attribute—including presence versus absence,
 spec-less module name, spec origin, module package/cache/path state, spec
 loader/search-location state, and loader name/path/archive/prefix—is likewise
 retained by object identity.
+The registry's exact key set must equal the stage's declared required project
+module set, and every registry key must be the identical `sys.modules` key
+object captured at load. An allowlisted project module imported and then
+deleted remains an extra registry entry and fails even when the final visible
+project-module set otherwise matches.
 
 The workflow supervisor launches separate native-test, simulated-test,
 full-module, and validator children; the local supervisor omits the native child
@@ -1891,14 +1914,36 @@ Snapshot regressions additionally require a traversal/scandir error, excessive
 entry count, excessive depth, and persistent mutation of each non-Python
 `.txt`/`.toml` oracle class to fail closed; every regular watched file is
 identity-bound and hashed, not only Python source.
+Independent persistent mutations of
+`.github/workflows/governance-oracles-windows.yml` and
+`docs/audits/2026-07-14-governance-oracle-review.md` must also fail at the
+outer snapshot boundary. A full-suite source regression deletes one
+non-mandatory test and fails exact ID/cardinality validation. Another imports
+the allowlisted `python_doctor`, deletes it from `sys.modules`, and fails the
+exact project-registry set check.
 They also retain the exit-zero `sitecustomize.py`, `usercustomize.py`, and
 `unittest.py` traps in checkout root and `src`. Every case must yield the
 supervisor's declared failure, not a successful workflow.
 
-This protocol detects accidental bypasses, hard exits, missing completion, and
-the named hostile fixtures. It is not an authenticity boundary against
-deliberately malicious repository code that reads the public inline protocol
-and forges its known nonce/evidence/sentinel values; no stronger claim is made.
+The stage dispatcher captures the original verifier and suite runner in local
+default arguments before repository execution; replacing the ordinary
+`__main__.verify_import_state` name therefore does not replace the reference
+used after the suite. A regression's `tearDownModule` replaces that public name
+and deletes baseline `json`; the captured verifier must still reject deletion.
+
+**Exact same-process boundary:** This protocol detects accidental bypasses and
+the named persistent, non-self-restoring mutations. It does not sandbox
+repository code executed in the same Python interpreter. Intentionally
+adversarial code that uses frame/global/function introspection, rewrites
+captured defaults or code objects, or restores a mutation before validation is
+outside this guarantee, whether or not it forges nonce, evidence, or sentinel
+values. No stronger same-process authenticity claim is made.
+
+`tests/test_governance_oracles.py` must assert that the preceding exact
+same-process-boundary paragraph appears once, that each supervisor captures the
+verifier as an `execute_stage` default before repository execution, and that no
+text claims same-interpreter sandboxing or protection from self-restoring
+introspection attacks.
 `G13-HOSTILE-REPOSITORY` remains governed by the separate fail-closed native-
 containment requirements above.
 
@@ -2044,7 +2089,7 @@ jobs:
                   fail(91, "source mutated")
               return bytes(chunks), signature(opened)
 
-          def snapshot(roots, checkout):
+          def snapshot(roots, files, checkout):
               records = {}
               total = 0
               count = 0
@@ -2091,6 +2136,20 @@ jobs:
                           records[key] = (identity, hashlib.sha256(raw).hexdigest())
                       for child in reversed(child_directories):
                           pending.append((child, depth + 1))
+              for path in files:
+                  path = pathlib.Path(os.path.abspath(str(path)))
+                  raw, identity = read_regular(path, checkout)
+                  key = "F:" + path.relative_to(checkout).as_posix()
+                  record = (identity, hashlib.sha256(raw).hexdigest())
+                  if key in records:
+                      if records[key] != record:
+                          fail(92, "enumerated artifact disagrees with root snapshot")
+                      continue
+                  count += 1
+                  total += len(raw)
+                  if count > MAX_ENTRIES or total > MAX_TOTAL_BYTES:
+                      fail(92, "snapshot exceeds cap")
+                  records[key] = record
               return records
 
           if len(sys.argv) != 2:
@@ -2113,6 +2172,25 @@ jobs:
               "scripts.governance.validate_oracles": (scripts_root / "governance" / "validate_oracles.py", False),
               "python_doctor": (doctor_root / "__init__.py", True),
           }
+          task0_artifacts = tuple(
+              checkout / relative
+              for relative in (
+                  ".github/workflows/governance-oracles-windows.yml",
+                  "docs/audits/2026-07-14-governance-oracle-review.md",
+                  "scripts/__init__.py",
+                  "scripts/governance/__init__.py",
+                  "scripts/governance/validate_oracles.py",
+                  "tests/test_governance_oracles.py",
+                  "tests/fixtures/governance/expected-requirement-ids.txt",
+                  "tests/fixtures/governance/expected-skill-ids.txt",
+                  "tests/fixtures/governance/expected-profile-domain-ids.txt",
+                  "tests/fixtures/governance/expected-provenance-sources.toml",
+                  "tests/fixtures/governance/expected-gate-clauses.toml",
+                  "tests/fixtures/governance/expected-gate-checks.toml",
+              )
+          )
+          if len(task0_artifacts) != 12 or len(set(task0_artifacts)) != 12:
+              fail(92, "Task 0 artifact inventory")
           encoded_modules = {}
           for name, (path, package) in module_paths.items():
               raw, _identity = read_regular(path, checkout)
@@ -2205,6 +2283,12 @@ jobs:
           }
           required_project_modules = required_project_modules_by_stage.get(stage)
           if required_project_modules is None:
+              abort()
+          full_suite_inventory = {
+              "posix": (52, "0dc6c93343d96463783a39c6ac91aab399a10411c496a923eb70a8b41f145078"),
+              "nt": (49, "c5845af178802905e0c02a2ccdc79a188cf5cd42cfd8020fb5824907177f4adc"),
+          }.get(os.name)
+          if full_suite_inventory is None:
               abort()
           MODULES_CONTAINER = sys.modules
           IMPORTER_CACHE_CONTAINER = sys.path_importer_cache
@@ -2494,17 +2578,18 @@ jobs:
                   )
                   if len(matching_keys) != 1:
                       abort()
+                  project_key = matching_keys[0]
                   module_attributes = freeze_attributes(module, MODULE_IMPORT_ATTRIBUTES)
                   spec_attributes = freeze_attributes(spec, SPEC_IMPORT_ATTRIBUTES)
                   loader_attributes = freeze_attributes(self, LOADER_IMPORT_ATTRIBUTES + ("digest",))
                   module_path_state, spec_path_state = freeze_package_paths(module, spec)
-                  project_identities[self.name] = (
-                      matching_keys[0], module, spec, self,
+                  project_identities[project_key] = (
+                      project_key, module, spec, self,
                       module_attributes, spec_attributes, loader_attributes,
                       module_path_state, spec_path_state,
                   )
                   SOURCE_EXEC_MODULE(self, module)
-                  identity = project_identities.get(self.name)
+                  identity = project_identities.get(project_key)
                   if (
                       identity is None
                       or identity[0] not in sys.modules
@@ -2794,6 +2879,13 @@ jobs:
               }
               if observed_project_modules != required_project_modules:
                   abort()
+              if set(project_identities) != required_project_modules:
+                  abort()
+              project_by_key_identity = {}
+              for project_key, project_identity in project_identities.items():
+                  if project_key is not project_identity[0] or id(project_key) in project_by_key_identity:
+                      abort()
+                  project_by_key_identity[id(project_key)] = (project_key, project_identity)
               for name, module in current_modules:
                   if name.partition(".")[0] not in finder.prefixes:
                       baseline_entry = baseline_key_identities.get(id(name))
@@ -2808,7 +2900,10 @@ jobs:
                   expected = pathlib.Path(raw_path)
                   spec = getattr(module, "__spec__", None)
                   loader = getattr(module, "__loader__", None)
-                  identity = project_identities.get(name)
+                  registry_entry = project_by_key_identity.get(id(name))
+                  if registry_entry is None or registry_entry[0] is not name:
+                      abort()
+                  identity = registry_entry[1]
                   if (
                       identity is None
                       or identity[0] is not name
@@ -2875,12 +2970,35 @@ jobs:
                       abort()
                   capture(expected, digest)
 
-          def run_suite(target, exact_count):
+          def discovered_test_ids(suite):
+              identifiers = []
+              pending = [suite]
+              while pending:
+                  item = pending.pop()
+                  if isinstance(item, unittest.TestSuite):
+                      pending.extend(reversed(tuple(item)))
+                      continue
+                  identifier = item.id()
+                  if type(identifier) is not str:
+                      abort()
+                  identifiers.append(identifier)
+              return tuple(identifiers)
+
+          def run_suite(target, exact_count, exact_digest=None):
               try:
                   suite = unittest.defaultTestLoader.loadTestsFromName(target)
                   expected = suite.countTestCases()
                   if expected <= 0 or exact_count is not None and expected != exact_count:
                       abort()
+                  identifiers = discovered_test_ids(suite)
+                  if len(identifiers) != expected:
+                      abort()
+                  if exact_count == 1 and identifiers != (target,):
+                      abort()
+                  if exact_digest is not None:
+                      encoded_ids = ("\n".join(identifiers) + "\n").encode("ascii")
+                      if identifiers != tuple(sorted(identifiers)) or hashlib.sha256(encoded_ids).hexdigest() != exact_digest:
+                          abort()
                   result = unittest.TextTestRunner(verbosity=2).run(suite)
               except BaseException:
                   abort()
@@ -2889,24 +3007,34 @@ jobs:
               if result.skipped or result.expectedFailures or result.unexpectedSuccesses:
                   abort()
 
-          if stage == "native":
-              run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip", 1)
-          elif stage == "simulated":
-              run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level", 1)
-          elif stage == "full":
-              run_suite("tests.test_governance_oracles", None)
-          elif stage == "validator":
-              try:
-                  from scripts.governance import validate_oracles
-                  status = validate_oracles.main((str(root),))
-              except BaseException:
+          def execute_stage(
+              _stage=stage,
+              _root=root,
+              _inventory=full_suite_inventory,
+              _run_suite=run_suite,
+              _verify_import_state=verify_import_state,
+          ):
+              if _stage == "native":
+                  _run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip", 1)
+              elif _stage == "simulated":
+                  _run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level", 1)
+              elif _stage == "full":
+                  _run_suite("tests.test_governance_oracles", _inventory[0], _inventory[1])
+              elif _stage == "validator":
+                  try:
+                      from scripts.governance import validate_oracles
+                      status = validate_oracles.main((str(_root),))
+                  except BaseException:
+                      abort()
+                  if type(status) is not int or status != 0:
+                      abort()
+              else:
                   abort()
-              if type(status) is not int or status != 0:
-                  abort()
-          else:
-              abort()
-          verify_import_state()
-          evidence = "PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + stage
+              _verify_import_state()
+              return _stage
+
+          completed_stage = execute_stage()
+          evidence = "PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + completed_stage
           print(evidence, flush=True)
           sys.stdout.flush()
           sys.stderr.flush()
@@ -2922,7 +3050,7 @@ jobs:
           }
           encoded = json.dumps(encoded_modules, sort_keys=True, separators=(",", ":"))
           for stage, success_code in stages:
-              before = snapshot(watched_roots, checkout)
+              before = snapshot(watched_roots, task0_artifacts, checkout)
               nonce = secrets.token_hex(16)
               try:
                   process = subprocess.run(
@@ -2945,7 +3073,7 @@ jobs:
               sys.stdout.buffer.flush()
               sys.stderr.buffer.write(process.stderr)
               sys.stderr.buffer.flush()
-              after = snapshot(watched_roots, checkout)
+              after = snapshot(watched_roots, task0_artifacts, checkout)
               evidence = ("PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + stage).encode("ascii")
               if before != after or process.returncode != success_code:
                   fail(94, "stage process failed")
@@ -3050,7 +3178,7 @@ def read_regular(path, root):
         fail(91, "source mutated")
     return bytes(chunks), signature(opened)
 
-def snapshot(roots, checkout):
+def snapshot(roots, files, checkout):
     records = {}
     total = 0
     count = 0
@@ -3097,6 +3225,20 @@ def snapshot(roots, checkout):
                 records[key] = (identity, hashlib.sha256(raw).hexdigest())
             for child in reversed(child_directories):
                 pending.append((child, depth + 1))
+    for path in files:
+        path = pathlib.Path(os.path.abspath(str(path)))
+        raw, identity = read_regular(path, checkout)
+        key = "F:" + path.relative_to(checkout).as_posix()
+        record = (identity, hashlib.sha256(raw).hexdigest())
+        if key in records:
+            if records[key] != record:
+                fail(92, "enumerated artifact disagrees with root snapshot")
+            continue
+        count += 1
+        total += len(raw)
+        if count > MAX_ENTRIES or total > MAX_TOTAL_BYTES:
+            fail(92, "snapshot exceeds cap")
+        records[key] = record
     return records
 
 if len(sys.argv) != 2:
@@ -3119,6 +3261,25 @@ module_paths = {
     "scripts.governance.validate_oracles": (scripts_root / "governance" / "validate_oracles.py", False),
     "python_doctor": (doctor_root / "__init__.py", True),
 }
+task0_artifacts = tuple(
+    checkout / relative
+    for relative in (
+        ".github/workflows/governance-oracles-windows.yml",
+        "docs/audits/2026-07-14-governance-oracle-review.md",
+        "scripts/__init__.py",
+        "scripts/governance/__init__.py",
+        "scripts/governance/validate_oracles.py",
+        "tests/test_governance_oracles.py",
+        "tests/fixtures/governance/expected-requirement-ids.txt",
+        "tests/fixtures/governance/expected-skill-ids.txt",
+        "tests/fixtures/governance/expected-profile-domain-ids.txt",
+        "tests/fixtures/governance/expected-provenance-sources.toml",
+        "tests/fixtures/governance/expected-gate-clauses.toml",
+        "tests/fixtures/governance/expected-gate-checks.toml",
+    )
+)
+if len(task0_artifacts) != 12 or len(set(task0_artifacts)) != 12:
+    fail(92, "Task 0 artifact inventory")
 encoded_modules = {}
 for name, (path, package) in module_paths.items():
     raw, _identity = read_regular(path, checkout)
@@ -3211,6 +3372,12 @@ required_project_modules_by_stage = {
 }
 required_project_modules = required_project_modules_by_stage.get(stage)
 if required_project_modules is None:
+    abort()
+full_suite_inventory = {
+    "posix": (52, "0dc6c93343d96463783a39c6ac91aab399a10411c496a923eb70a8b41f145078"),
+    "nt": (49, "c5845af178802905e0c02a2ccdc79a188cf5cd42cfd8020fb5824907177f4adc"),
+}.get(os.name)
+if full_suite_inventory is None:
     abort()
 MODULES_CONTAINER = sys.modules
 IMPORTER_CACHE_CONTAINER = sys.path_importer_cache
@@ -3500,17 +3667,18 @@ class ExactLoader(SOURCE_LOADER):
         )
         if len(matching_keys) != 1:
             abort()
+        project_key = matching_keys[0]
         module_attributes = freeze_attributes(module, MODULE_IMPORT_ATTRIBUTES)
         spec_attributes = freeze_attributes(spec, SPEC_IMPORT_ATTRIBUTES)
         loader_attributes = freeze_attributes(self, LOADER_IMPORT_ATTRIBUTES + ("digest",))
         module_path_state, spec_path_state = freeze_package_paths(module, spec)
-        project_identities[self.name] = (
-            matching_keys[0], module, spec, self,
+        project_identities[project_key] = (
+            project_key, module, spec, self,
             module_attributes, spec_attributes, loader_attributes,
             module_path_state, spec_path_state,
         )
         SOURCE_EXEC_MODULE(self, module)
-        identity = project_identities.get(self.name)
+        identity = project_identities.get(project_key)
         if (
             identity is None
             or identity[0] not in sys.modules
@@ -3800,6 +3968,13 @@ def verify_import_state():
     }
     if observed_project_modules != required_project_modules:
         abort()
+    if set(project_identities) != required_project_modules:
+        abort()
+    project_by_key_identity = {}
+    for project_key, project_identity in project_identities.items():
+        if project_key is not project_identity[0] or id(project_key) in project_by_key_identity:
+            abort()
+        project_by_key_identity[id(project_key)] = (project_key, project_identity)
     for name, module in current_modules:
         if name.partition(".")[0] not in finder.prefixes:
             baseline_entry = baseline_key_identities.get(id(name))
@@ -3814,7 +3989,10 @@ def verify_import_state():
         expected = pathlib.Path(raw_path)
         spec = getattr(module, "__spec__", None)
         loader = getattr(module, "__loader__", None)
-        identity = project_identities.get(name)
+        registry_entry = project_by_key_identity.get(id(name))
+        if registry_entry is None or registry_entry[0] is not name:
+            abort()
+        identity = registry_entry[1]
         if (
             identity is None
             or identity[0] is not name
@@ -3881,12 +4059,35 @@ def verify_import_state():
             abort()
         capture(expected, digest)
 
-def run_suite(target, exact_count):
+def discovered_test_ids(suite):
+    identifiers = []
+    pending = [suite]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, unittest.TestSuite):
+            pending.extend(reversed(tuple(item)))
+            continue
+        identifier = item.id()
+        if type(identifier) is not str:
+            abort()
+        identifiers.append(identifier)
+    return tuple(identifiers)
+
+def run_suite(target, exact_count, exact_digest=None):
     try:
         suite = unittest.defaultTestLoader.loadTestsFromName(target)
         expected = suite.countTestCases()
         if expected <= 0 or exact_count is not None and expected != exact_count:
             abort()
+        identifiers = discovered_test_ids(suite)
+        if len(identifiers) != expected:
+            abort()
+        if exact_count == 1 and identifiers != (target,):
+            abort()
+        if exact_digest is not None:
+            encoded_ids = ("\n".join(identifiers) + "\n").encode("ascii")
+            if identifiers != tuple(sorted(identifiers)) or hashlib.sha256(encoded_ids).hexdigest() != exact_digest:
+                abort()
         result = unittest.TextTestRunner(verbosity=2).run(suite)
     except BaseException:
         abort()
@@ -3895,24 +4096,34 @@ def run_suite(target, exact_count):
     if result.skipped or result.expectedFailures or result.unexpectedSuccesses:
         abort()
 
-if stage == "native":
-    run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip", 1)
-elif stage == "simulated":
-    run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level", 1)
-elif stage == "full":
-    run_suite("tests.test_governance_oracles", None)
-elif stage == "validator":
-    try:
-        from scripts.governance import validate_oracles
-        status = validate_oracles.main((str(root),))
-    except BaseException:
+def execute_stage(
+    _stage=stage,
+    _root=root,
+    _inventory=full_suite_inventory,
+    _run_suite=run_suite,
+    _verify_import_state=verify_import_state,
+):
+    if _stage == "native":
+        _run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_windows_junction_component_is_rejected_without_skip", 1)
+    elif _stage == "simulated":
+        _run_suite("tests.test_governance_oracles.GovernanceOracleTests.test_observed_windows_reparse_points_are_rejected_at_every_level", 1)
+    elif _stage == "full":
+        _run_suite("tests.test_governance_oracles", _inventory[0], _inventory[1])
+    elif _stage == "validator":
+        try:
+            from scripts.governance import validate_oracles
+            status = validate_oracles.main((str(_root),))
+        except BaseException:
+            abort()
+        if type(status) is not int or status != 0:
+            abort()
+    else:
         abort()
-    if type(status) is not int or status != 0:
-        abort()
-else:
-    abort()
-verify_import_state()
-evidence = "PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + stage
+    _verify_import_state()
+    return _stage
+
+completed_stage = execute_stage()
+evidence = "PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + completed_stage
 print(evidence, flush=True)
 sys.stdout.flush()
 sys.stderr.flush()
@@ -3930,7 +4141,7 @@ child_environment = {
 }
 encoded = json.dumps(encoded_modules, sort_keys=True, separators=(",", ":"))
 for stage, success_code in stages:
-    before = snapshot(watched_roots, checkout)
+    before = snapshot(watched_roots, task0_artifacts, checkout)
     nonce = secrets.token_hex(16)
     try:
         process = subprocess.run(
@@ -3953,7 +4164,7 @@ for stage, success_code in stages:
     sys.stdout.buffer.flush()
     sys.stderr.buffer.write(process.stderr)
     sys.stderr.buffer.flush()
-    after = snapshot(watched_roots, checkout)
+    after = snapshot(watched_roots, task0_artifacts, checkout)
     evidence = ("PYTHON_DOCTOR_ORACLE_STAGE_OK:" + nonce + ":" + stage).encode("ascii")
     if before != after or process.returncode != success_code:
         fail(94, "stage process failed")
